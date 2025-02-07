@@ -1,0 +1,17 @@
+[package]
+name = "s3-cache"
+version = "0.1.0"
+edition = "2021"
+
+authors = ["Greg Whiteley <greg.whiteley@gmail.com>"]
+license = "GPL-3.0-or-later"
+
+repository = "https://github.com/whitty/s3-cache"
+readme = "README.md"
+
+description = "Deduplicating temporary store for CI artifacts"
+categories = ["command-line-utilities", "CI"]
+
+exclude = [".jenkinsfile"]
+
+[dependencies]
