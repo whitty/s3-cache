@@ -15,3 +15,12 @@ categories = ["command-line-utilities", "CI"]
 exclude = [".jenkinsfile"]
 
 [dependencies]
+clap = { version = "=4.5.8", features = ["wrap_help", "derive"] }
+rust-s3 = { version = "0.35.1", features = ["with-tokio"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "fs"] }
+async-std = { version = "1", features = ["attributes"] }
+uuid = { version = "1", features = ["v4"] }
+env_logger = "0.11"
+anyhow = "1"
+dotenvy = { version = "0.15.7" }
+thiserror = "2.0.11"
