@@ -76,7 +76,7 @@ struct CacheArgs {
 #[derive(clap::Args, Debug)]
 struct Upload {
     /// Files to cache and upload
-    files: Vec<String>,
+    files: Vec<std::path::PathBuf>,
 
     #[command(flatten)]
     cache: CacheArgs,
