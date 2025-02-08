@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
     match &args.command {
         Commands::Upload(arg) => {
             println!("Upload {:?}",arg);
-            s3_cache::actions::upload(bucket).await?;
+            s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files).await?;
         },
         Commands::Download(arg) => {
             println!("{:?}",arg);
