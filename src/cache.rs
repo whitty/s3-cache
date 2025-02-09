@@ -5,6 +5,20 @@ use super::Result;
 use sha2::{Sha256, Digest};
 use tokio::io::AsyncReadExt;
 
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub(crate) struct Cache {
+    pub files: Vec<File>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct File {
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+}
+
 pub(crate) async fn read_hash(path: &async_std::path::Path, len: &Option<u64>) -> Result<[u8;32]> {
 
     // allocate a buffer one page -> 1 meg
