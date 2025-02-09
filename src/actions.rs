@@ -4,10 +4,8 @@
 use anyhow::Context;
 use async_std::path::PathBuf;
 use s3::Bucket;
-use sha2::{Sha256, Digest};
-use tokio::{fs::File, io::AsyncReadExt};
 
-use crate::Result;
+use crate::{Result, cache};
 
 #[derive(Debug)]
 struct Meta {
@@ -44,19 +42,7 @@ async fn meta_for(path: PathBuf) -> Result<Meta> {
     m.resolve().await?;
 
     if m.file.as_ref().map_or(true, std::fs::Metadata::is_file) {
-        // allocate a buffer one page -> 1 meg
-        let buf_size = m.file.as_ref().map_or(0, std::fs::Metadata::len).clamp(4096, 1024*1024);
-        let mut buf = vec![0; buf_size.try_into().unwrap()];
-        let mut sha = Sha256::new();
-
-        let mut f = File::open(&m.path).await?;
-        loop {
-            let len = f.read(&mut buf).await?;
-            if len == 0 { break; }
-            sha.update(&buf[..len]);
-        }
-        let result = sha.finalize();
-        m.hash = Some(result.into());
+        m.hash = Some(cache::read_hash(m.path.as_path(), &m.file.as_ref().map(std::fs::Metadata::len)).await?);
     }
 
     Ok(m)
