@@ -34,6 +34,10 @@ impl Meta {
             path
         })
     }
+
+    fn is_cacheable(&self) -> bool {
+        self.hash.is_some() && self.file.is_some()
+    }
 }
 
 async fn meta_for(path: PathBuf) -> Result<Meta> {
@@ -48,26 +52,51 @@ async fn meta_for(path: PathBuf) -> Result<Meta> {
     Ok(m)
 }
 
+enum UploadWork {
+    Meta(Result<Meta>),
+}
+
+async fn work_meta_for(path: PathBuf) -> UploadWork {
+    UploadWork::Meta(meta_for(path).await)
+}
+
 pub async fn upload(_bucket: Box<Bucket>,
                     _name: &str, paths: &[std::path::PathBuf] ) -> Result<()> {
 
-    let mut path_set = tokio::task::JoinSet::<Result<Meta>>::new();
+    let mut path_set = tokio::task::JoinSet::<UploadWork>::new();
 
     for path in paths {
-        path_set.spawn(meta_for(path.into()));
+        path_set.spawn(work_meta_for(path.into()));
     }
 
-    let mut output = Vec::new();
-    while let Some(meta) = path_set.join_next().await {
+    let mut cache_entry = cache::Cache::default();
+    while let Some(work) = path_set.join_next().await {
         // JoinError
-        let meta = meta.with_context(|| "Failure waiting on metadata parsing")?;
-        // Our Errors
-        let meta = meta.with_context(|| "Failed to load metadata")?;
-        println!("{:?}\tmeta={:?} size={:?} path={:?}",
-                 meta.path.to_str(), meta, meta.file.as_ref().map_or(0, |x| { x.len() }),
-                 meta.path());
-        output.push(meta);
+        let work = work.with_context(|| "Failure waiting on upload work")?;
+
+        match work {
+            UploadWork::Meta(meta) => {
+                let meta = meta.with_context(|| "Failed to load metadata")?;
+
+                println!("{:?}\tmeta={:?} size={:?} path={:?}",
+                         meta.path.to_str(), meta, meta.file.as_ref().map_or(0, |x| { x.len() }),
+                         meta.path());
+
+                if !meta.is_cacheable() {
+                    continue;
+                }
+
+                cache_entry.files.push(cache::File {
+                    name: meta.path.to_str().expect("bad paths should be handled by is_cacheable").to_owned(),
+                    path: meta.path().expect("todo no path should be handled by is_cacheable").to_str().expect("should not generate bad patsh").to_owned(),
+                    size: meta.file.as_ref().map_or(0, std::fs::Metadata::len)
+                });
+
+            },
+        }
     }
+
+    println!("{:?}", cache_entry);
 
     // would be nice to start work when the first arrives instead,...
 
