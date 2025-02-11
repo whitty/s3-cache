@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // (C) Copyright 2025 Greg Whiteley
 
+use std::path::PathBuf;
+
 use super::Result;
 use sha2::{Sha256, Digest};
 use tokio::io::AsyncReadExt;
@@ -19,11 +21,42 @@ pub(crate) struct Cache {
     pub files: Vec<File>,
 }
 
+impl Cache {
+    pub fn location(&self, cache_name: &str) -> PathBuf {
+        let mut b = PathBuf::new();
+        b.push("cache");
+        b.push(cache_name);
+        b.push("entry");
+        b
+    }
+    pub fn into_string(self) -> String {
+        let cache = CacheVersions::V1(self);
+        serde_json::to_string(&cache).expect("Cache entries should be serialiseable")
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct File {
     pub path: String,
-    pub object: String,
+    pub object: Option<String>,
     pub size: u64,
+}
+
+impl File {
+    pub fn storage_path(&self, cache_name: &str) -> PathBuf {
+        let mut b = PathBuf::new();
+        if let Some(s) = self.object.as_ref() {
+            b.push("objects");
+            b.push(s);
+            b.push("bin");
+        } else {
+            b.push("cache");
+            b.push(cache_name);
+            b.push("files");
+            b.push(&self.path);
+        }
+        b
+    }
 }
 
 pub(crate) async fn read_hash(path: &async_std::path::Path, len: &Option<u64>) -> Result<[u8;32]> {
@@ -57,7 +90,7 @@ mod test {
 
         // Round trip of version container
         let mut c = Cache::default();
-        c.files.push(File{ path: "foo.exe".into(), object: "aa/bb/cc/dddd".into(), size: 123456 });
+        c.files.push(File{ path: "foo.exe".into(), object: Some("aa/bb/cc/dddd".into()), size: 123456 });
         let v = CacheVersions::V1(c);
         let x = serde_json::to_string(&v).unwrap();
 

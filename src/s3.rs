@@ -64,7 +64,7 @@ impl Storage {
         Ok(Connection { bucket })
     }
 
-    pub async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
+    pub async fn put_file_unless_exists<R: tokio::io::AsyncRead + Unpin + ?Sized>(
         &self, reader: &mut R, s3_path: &str) -> Result<()> {
 
         let connection = self.connect().await?;
@@ -73,6 +73,14 @@ impl Storage {
             println!("File {} exists", s3_path);
             return Ok(());
         }
+
+        connection.put_file(reader, s3_path).await
+    }
+
+    pub async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
+        &self, reader: &mut R, s3_path: &str) -> Result<()> {
+
+        let connection = self.connect().await?;
 
         connection.put_file(reader, s3_path).await
     }

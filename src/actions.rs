@@ -41,7 +41,6 @@ impl Meta {
 }
 
 async fn meta_for(path: PathBuf) -> Result<Meta> {
-    println!("path={:?}", path);
     let mut m = Meta::new(path);
     m.resolve().await?;
 
@@ -55,7 +54,10 @@ async fn meta_for(path: PathBuf) -> Result<Meta> {
 async fn upload_file(storage: Storage, file: cache::File) -> Result<()> {
     let mut f = tokio::fs::File::open(&file.path).await?;
 
-    storage.put_file(&mut f, &file.object).await?;
+    let p = file.storage_path("TODO - name");
+    let path = p.to_str().expect("Invalid storage_path -> string");
+    println!("Inserting {}", file.path);
+    storage.put_file_unless_exists(&mut f, path).await?;
 
     Ok(())
 }
@@ -79,8 +81,8 @@ pub async fn expire(storage: Storage) -> Result<()> {
     Ok(())
 }
 
-pub async fn upload(bucket: Storage,
-                    _cache_name: &str, paths: &[std::path::PathBuf] ) -> Result<()> {
+pub async fn upload(storage: Storage,
+                    cache_name: &str, paths: &[std::path::PathBuf] ) -> Result<()> {
 
     let mut path_set = tokio::task::JoinSet::<UploadWork>::new();
 
@@ -97,9 +99,6 @@ pub async fn upload(bucket: Storage,
             UploadWork::Meta(meta) => {
                 let meta = meta.with_context(|| "Failed to load metadata")?;
 
-                println!("{:?}\tmeta={:?} size={:?} path={:?}",
-                         meta.path.to_str(), meta, meta.file.as_ref().map_or(0, |x| { x.len() }),
-                         meta.object_path());
 
                 if !meta.is_cacheable() {
                     continue;
@@ -112,13 +111,13 @@ pub async fn upload(bucket: Storage,
 
                 let file = cache::File {
                     path: path.to_owned(),
-                    object: object.clone(),
+                    object: Some(object.clone()),
                     size
                 };
 
                 cache_entry.files.push(file.clone());
 
-                path_set.spawn(work_upload(bucket.clone(), file));
+                path_set.spawn(work_upload(storage.clone(), file));
             },
 
             UploadWork::Upload(result) => {
@@ -127,7 +126,8 @@ pub async fn upload(bucket: Storage,
         }
     }
 
-    println!("{:?}", cache_entry);
+    let path = cache_entry.location(cache_name);
+    storage.put_file(&mut std::io::Cursor::new(cache_entry.into_string()), path.to_str().unwrap()).await?;
 
     // would be nice to start work when the first arrives instead,...
 
