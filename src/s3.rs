@@ -32,37 +32,71 @@ impl Storage {
             region, credentials,
         };
 
-        let bucket = s.connect_bucket().await?;
+        match s.connect().await {
+            Ok(_) => Ok(s),
+            Err(Error::BucketNotFound(x)) => {
 
-        if !bucket.exists().await? {
-            if !create {
-                return Err(Error::BucketNotFound(bucket_name.to_owned()))
-            }
-            s.create_bucket().await?;
+                if !create {
+                    return Err(Error::BucketNotFound(x))
+                }
+                s.create().await?;
+                Ok(s)
+            },
+            Err(e) => Err(e),
         }
-
-        Ok(s)
     }
 
-    async fn connect_bucket(&self) -> Result<Box<Bucket>> {
+    async fn connect(&self) -> Result<Connection> {
         let bucket = Bucket::new(self.bucket_name.as_str(), self.region.clone(), self.credentials.clone())?
             .with_path_style();
-        Ok(bucket)
+        if !bucket.exists().await? {
+            return Err(Error::BucketNotFound(self.bucket_name.to_owned()))
+        }
+        Ok(Connection { bucket })
     }
 
-    async fn create_bucket(&self) -> Result<Box<Bucket>> {
+    async fn create(&self) -> Result<Connection> {
         let bucket = Bucket::create_with_path_style(
             self.bucket_name.as_str(), self.region.clone(),
             self.credentials.clone(), BucketConfiguration::default()).await
             .map_err(Error::BucketCreationError)?
             .bucket;
-        Ok(bucket)
+        Ok(Connection { bucket })
     }
+
+    pub async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
+        &self, reader: &mut R, s3_path: &str) -> Result<()> {
+
+        let connection = self.connect().await?;
+
+        if connection.exists(s3_path).await? {
+            println!("File {} exists", s3_path);
+            return Ok(());
+        }
+
+        connection.put_file(reader, s3_path).await
+    }
+
+    pub async fn delete(&self, s3_path: &str) -> Result<()> {
+
+        let connection = self.connect().await?;
+
+        connection.delete(s3_path).await
+    }
+}
+
+struct Connection {
+    bucket: Box<Bucket>,
+}
+
+impl Connection {
 
     pub async fn exists(&self, path: &str) -> Result<bool> {
         let result = self.head(path).await;
         match result {
-            Ok(_) => {
+            Ok(r) => {
+                println!("last_modified={}", r.last_modified.unwrap_or("".into()));
+                println!("content_length={}", r.content_length.unwrap_or(0));
                 Ok(true)
             },
             Err(Error::S3Error(s3::error::S3Error::HttpFailWithBody(404 ,_))) => Ok(false),
@@ -70,10 +104,28 @@ impl Storage {
         }
     }
 
-    async fn head(&self, path: &str) -> Result<s3::serde_types::HeadObjectResult> {
-        let bucket = self.connect_bucket().await?;
+    pub async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
+        &self, reader: &mut R, s3_path: &str) -> Result<()> {
+        let response = self.bucket.put_object_stream(reader, s3_path).await?;
 
-        let (head_object_result, _) = bucket.head_object(path).await?;
+        println!("put({}) response={:?} {}", s3_path, response, response.status_code());
+        assert_eq!(response.status_code(), 200);
+        Ok(())
+    }
+
+    pub async fn delete(&self, s3_path: &str) -> Result<()> {
+        let response = self.bucket.delete_object(s3_path).await?;
+
+        println!("delete({}) response={:?} {}", s3_path, response, response.status_code());
+        assert_eq!(response.status_code(), 204);
+        Ok(())
+    }
+
+    async fn head(&self, path: &str) -> Result<s3::serde_types::HeadObjectResult> {
+        let (head_object_result, code) = self.bucket.head_object(path).await?;
+
+        println!("code={}", code);
+        println!("head_object_result={:?}", head_object_result);
         Ok(head_object_result)
     }
 }

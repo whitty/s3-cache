@@ -52,18 +52,12 @@ async fn meta_for(path: PathBuf) -> Result<Meta> {
     Ok(m)
 }
 
-async fn check_file_exists(storage: &Storage, file: &cache::File) -> Result<bool> {
-
-    println!("check_file_exists {:?}", file);
-    Ok(storage.exists(&file.object).await?)
-}
-
-
 async fn upload_file(storage: Storage, file: cache::File) -> Result<()> {
-    if check_file_exists(&storage, &file).await? {
-        return Ok(())
-    }
-    println!("upload_file {:?}", file);
+    let mut f = tokio::fs::File::open(&file.path).await?;
+
+    storage.put_file(&mut f, &file.object).await?;
+
+    storage.delete(&file.object).await?;
     Ok(())
 }
 
