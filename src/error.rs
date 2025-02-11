@@ -11,7 +11,12 @@ pub enum Error {
     #[error("Bucket named '{0}' not found, and create not allowed")]
     BucketNotFound(String),
 
-    // REVIEW
-    #[error("I/O error reading from socket: {0}")]
-    IO(#[from] std::io::Error),
+    #[error("S3 Credential error: {0}")]
+    S3CredentialsError(#[from] s3::creds::error::CredentialsError),
+
+    #[error("Error from S3 service: {0}")]
+    S3Error(#[from] s3::error::S3Error),
+
+    #[error("Error creating bucket: {0}")]
+    BucketCreationError(s3::error::S3Error),
 }
