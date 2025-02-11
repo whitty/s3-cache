@@ -11,7 +11,7 @@ async fn main() -> Result<()> {
 
     let args = Options::parse();
 
-    let bucket = s3_cache::s3::connect_bucket(args.bucket.as_str(), args.region.as_str(), args.endpoint.as_str(), false).await?;
+    let bucket = s3_cache::Storage::new(args.bucket.as_str(), args.region.as_str(), args.endpoint.as_str(), false).await?;
 
     match &args.command {
         Commands::Upload(arg) => {
