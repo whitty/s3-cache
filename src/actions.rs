@@ -57,7 +57,6 @@ async fn upload_file(storage: Storage, file: cache::File) -> Result<()> {
 
     storage.put_file(&mut f, &file.object).await?;
 
-    storage.delete(&file.object).await?;
     Ok(())
 }
 
@@ -74,8 +73,14 @@ async fn work_upload(storage: Storage, file: cache::File) -> UploadWork {
     UploadWork::Upload(upload_file(storage, file).await)
 }
 
+pub async fn expire(storage: Storage) -> Result<()> {
+    // TODO - just to keep delete from being flagged unused
+    storage.delete("/foo").await?;
+    Ok(())
+}
+
 pub async fn upload(bucket: Storage,
-                    _name: &str, paths: &[std::path::PathBuf] ) -> Result<()> {
+                    _cache_name: &str, paths: &[std::path::PathBuf] ) -> Result<()> {
 
     let mut path_set = tokio::task::JoinSet::<UploadWork>::new();
 

@@ -26,6 +26,7 @@ async fn main() -> Result<()> {
         },
         Commands::Expire(arg) => {
             println!("{:?}",arg);
+            s3_cache::actions::expire(bucket).await?;
         },
     }
     Ok(())
