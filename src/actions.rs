@@ -5,7 +5,7 @@ use anyhow::Context;
 use async_std::path::PathBuf;
 use s3::Bucket;
 
-use crate::{Result, cache};
+use crate::{Result, cache, Storage};
 
 #[derive(Debug)]
 struct Meta {
@@ -24,7 +24,7 @@ impl Meta {
         Ok(())
     }
 
-    fn path(&self) -> Option<PathBuf> {
+    fn object_path(&self) -> Option<PathBuf> {
         self.hash.map(|ref x| {
             let mut path = PathBuf::new();
             path.push(faster_hex::hex_string(&x[0..4]));
@@ -52,15 +52,35 @@ async fn meta_for(path: PathBuf) -> Result<Meta> {
     Ok(m)
 }
 
+async fn check_file_exists(storage: &Storage, file: &cache::File) -> Result<bool> {
+
+    println!("check_file_exists {:?}", file);
+    Ok(storage.exists(&file.object).await?)
+}
+
+
+async fn upload_file(storage: Storage, file: cache::File) -> Result<()> {
+    if check_file_exists(&storage, &file).await? {
+        return Ok(())
+    }
+    println!("upload_file {:?}", file);
+    Ok(())
+}
+
 enum UploadWork {
     Meta(Result<Meta>),
+    Upload(Result<()>),
 }
 
 async fn work_meta_for(path: PathBuf) -> UploadWork {
     UploadWork::Meta(meta_for(path).await)
 }
 
-pub async fn upload(_bucket: Box<Bucket>,
+async fn work_upload(storage: Storage, file: cache::File) -> UploadWork {
+    UploadWork::Upload(upload_file(storage, file).await)
+}
+
+pub async fn upload(bucket: Storage,
                     _name: &str, paths: &[std::path::PathBuf] ) -> Result<()> {
 
     let mut path_set = tokio::task::JoinSet::<UploadWork>::new();
@@ -80,18 +100,30 @@ pub async fn upload(_bucket: Box<Bucket>,
 
                 println!("{:?}\tmeta={:?} size={:?} path={:?}",
                          meta.path.to_str(), meta, meta.file.as_ref().map_or(0, |x| { x.len() }),
-                         meta.path());
+                         meta.object_path());
 
                 if !meta.is_cacheable() {
                     continue;
                 }
 
-                cache_entry.files.push(cache::File {
-                    name: meta.path.to_str().expect("bad paths should be handled by is_cacheable").to_owned(),
-                    path: meta.path().expect("todo no path should be handled by is_cacheable").to_str().expect("should not generate bad patsh").to_owned(),
-                    size: meta.file.as_ref().map_or(0, std::fs::Metadata::len)
-                });
+                let path = meta.path.to_str().expect("bad paths should be handled by is_cacheable");
+                let object = meta.object_path().expect("todo no path should be handled by is_cacheable").to_str().expect("should not generate bad paths").to_owned();
+                let size = meta.file.as_ref().map_or(0, std::fs::Metadata::len);
 
+
+                let file = cache::File {
+                    path: path.to_owned(),
+                    object: object.clone(),
+                    size
+                };
+
+                cache_entry.files.push(file.clone());
+
+                path_set.spawn(work_upload(bucket.clone(), file));
+            },
+
+            UploadWork::Upload(result) => {
+                result.with_context(|| "Failed to upload file")?;
             },
         }
     }

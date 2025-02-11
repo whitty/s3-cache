@@ -14,8 +14,8 @@ pub(crate) struct Cache {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct File {
-    pub name: String,
     pub path: String,
+    pub object: String,
     pub size: u64,
 }
 
