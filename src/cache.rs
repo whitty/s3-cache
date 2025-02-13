@@ -35,6 +35,13 @@ impl Cache {
     }
 }
 
+pub(crate) fn decode(v: &[u8]) -> Result<Cache> {
+    let x: CacheVersions = serde_json::from_str(std::str::from_utf8(v)?)?;
+    match x {
+        CacheVersions::V1(c) => Ok(c),
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct File {
     pub path: String,
