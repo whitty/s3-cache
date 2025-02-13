@@ -22,7 +22,7 @@ pub(crate) struct Cache {
 }
 
 impl Cache {
-    pub fn location(&self, cache_name: &str) -> PathBuf {
+    pub fn location(cache_name: &str) -> PathBuf {
         let mut b = PathBuf::new();
         b.push("cache");
         b.push(cache_name);

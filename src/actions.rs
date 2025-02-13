@@ -5,7 +5,7 @@ use anyhow::Context;
 use async_std::path::PathBuf;
 use s3::Bucket;
 
-use crate::{Result, cache, Storage};
+use crate::{Result, cache::{self, Cache}, Storage};
 
 #[derive(Debug)]
 struct Meta {
@@ -126,7 +126,7 @@ pub async fn upload(storage: Storage,
         }
     }
 
-    let path = cache_entry.location(cache_name);
+    let path = Cache::location(cache_name);
     storage.put_file(&mut std::io::Cursor::new(cache_entry.into_string()), path.to_str().unwrap()).await?;
 
     // would be nice to start work when the first arrives instead,...
