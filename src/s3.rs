@@ -85,6 +85,14 @@ impl Storage {
         connection.put_file(reader, s3_path).await
     }
 
+    pub async fn get_file<W: tokio::io::AsyncWrite + Send + Unpin + ?Sized>(
+        &self, writer: &mut W, s3_path: &str) -> Result<()> {
+
+        let connection = self.connect().await?;
+
+        connection.get_file_stream(s3_path, writer).await
+    }
+
     pub async fn delete(&self, s3_path: &str) -> Result<()> {
 
         let connection = self.connect().await?;
@@ -99,7 +107,7 @@ struct Connection {
 
 impl Connection {
 
-    pub async fn exists(&self, path: &str) -> Result<bool> {
+    async fn exists(&self, path: &str) -> Result<bool> {
         let result = self.head(path).await;
         match result {
             Ok(r) => {
@@ -112,7 +120,7 @@ impl Connection {
         }
     }
 
-    pub async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
+    async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
         &self, reader: &mut R, s3_path: &str) -> Result<()> {
         let response = self.bucket.put_object_stream(reader, s3_path).await?;
 
@@ -121,7 +129,13 @@ impl Connection {
         Ok(())
     }
 
-    pub async fn delete(&self, s3_path: &str) -> Result<()> {
+    async fn get_file_stream<W: tokio::io::AsyncWrite + Send + Unpin + ?Sized>(&self, s3_path: &str, w: &mut W) -> Result<()> {
+        let code = self.bucket.get_object_to_writer(s3_path, w).await?;
+        println!("code={}", code);
+        Ok(())
+    }
+
+    async fn delete(&self, s3_path: &str) -> Result<()> {
         let response = self.bucket.delete_object(s3_path).await?;
 
         println!("delete({}) response={:?} {}", s3_path, response, response.status_code());
