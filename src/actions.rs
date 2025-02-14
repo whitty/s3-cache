@@ -125,7 +125,7 @@ pub async fn upload(storage: Storage,
         }
     }
 
-    let path = Cache::location(cache_name);
+    let path = Cache::entry_location(cache_name);
     storage.put_file(&mut std::io::Cursor::new(cache_entry.into_string()), path.to_str().unwrap()).await?;
 
     // would be nice to start work when the first arrives instead,...
@@ -133,13 +133,18 @@ pub async fn upload(storage: Storage,
     Ok(())
 }
 
+async fn read_cache_info(storage: &Storage, cache_name: &str) -> Result<Cache> {
+    let path = Cache::entry_location(cache_name);
+
+    let mut vec = Vec::<u8>::new();
+    storage.get_file(&mut vec, path.to_str().unwrap()).await?;
+    let c = cache::decode(&vec)?;
+    Ok(c)
+}
+
 pub async fn list(storage: Storage, cache_name: Option<&str>) -> Result<()> {
     if let Some(cache_name) = cache_name {
-        let path = Cache::location(cache_name);
-
-        let mut vec = Vec::<u8>::new();
-        storage.get_file(&mut vec, path.to_str().unwrap()).await?;
-        let c = cache::decode(&vec)?;
+        let c = read_cache_info(&storage, cache_name).await?;
 
         let largest = c.files.iter().max_by(|x, y| x.path.len().cmp(&y.path.len()));
         if let Some(longest) = largest {

@@ -22,13 +22,19 @@ pub(crate) struct Cache {
 }
 
 impl Cache {
+    pub fn entry_location(cache_name: &str) -> PathBuf {
+        let mut b = Self::location(cache_name);
+        b.push("entry");
+        b
+    }
+
     pub fn location(cache_name: &str) -> PathBuf {
         let mut b = PathBuf::new();
         b.push("cache");
         b.push(cache_name);
-        b.push("entry");
         b
     }
+
     pub fn into_string(self) -> String {
         let cache = CacheVersions::V1(self);
         serde_json::to_string(&cache).expect("Cache entries should be serialiseable")
