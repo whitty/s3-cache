@@ -11,6 +11,9 @@ pub enum Error {
     #[error("Bucket named '{0}' not found, and create not allowed")]
     BucketNotFound(String),
 
+    #[error("Unable to respresent path '{0}'")]
+    InvalidPath(std::path::PathBuf),
+
     #[error("S3 Credential error: {0}")]
     S3CredentialsError(#[from] s3::creds::error::CredentialsError),
 
