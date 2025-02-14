@@ -24,6 +24,9 @@ async fn main() -> Result<()> {
         Commands::Delete(arg) => {
             println!("{:?}",arg);
         },
+        Commands::List(arg) => {
+            s3_cache::actions::list(bucket, arg.name.as_deref()).await?;
+        },
         Commands::Expire(arg) => {
             println!("{:?}",arg);
             s3_cache::actions::expire(bucket).await?;
@@ -63,6 +66,8 @@ enum Commands {
     Download(Download),
     /// Delete a cache - files will not be accessible, but they won't be deleted.
     Delete(Delete),
+    /// List files from a cache
+    List(List),
     /// Expire old or unused files from cache
     Expire(Expire),
 }
@@ -87,6 +92,13 @@ struct Upload {
 struct Download {
     #[command(flatten)]
     cache: CacheArgs,
+}
+
+#[derive(clap::Args, Debug)]
+struct List {
+    /// The name of the cache to list. If not presented list the caches.
+    #[arg(long)]
+    name: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]

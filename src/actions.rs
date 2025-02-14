@@ -133,3 +133,26 @@ pub async fn upload(storage: Storage,
 
     Ok(())
 }
+
+pub async fn list(storage: Storage, cache_name: Option<&str>) -> Result<()> {
+    if let Some(cache_name) = cache_name {
+        let path = Cache::location(cache_name);
+
+        let mut vec = Vec::<u8>::new();
+        storage.get_file(&mut vec, path.to_str().unwrap()).await?;
+        let c = cache::decode(&vec)?;
+
+        let largest = c.files.iter().max_by(|x, y| x.path.len().cmp(&y.path.len()));
+        if let Some(longest) = largest {
+            let len = longest.path.len().max(30);
+            for f in c.files {
+                println!("{path:<0$} {size:>10}", len, path=f.path, size=f.size);
+            }
+        }
+    } else {
+        for c in storage.list_dirs("cache/").await? {
+            println!("{}", c);
+        }
+    }
+    Ok(())
+}

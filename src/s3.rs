@@ -77,6 +77,13 @@ impl Storage {
         connection.put_file(reader, s3_path).await
     }
 
+    pub async fn list_dirs(&self, path: &str) -> Result<Vec<String>> {
+        // Async variant with `tokio` or `async-std` features
+        let connection = self.connect().await?;
+
+        connection.list_dirs(path).await
+    }
+
     pub async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
         &self, reader: &mut R, s3_path: &str) -> Result<()> {
 
@@ -150,4 +157,31 @@ impl Connection {
         println!("head_object_result={:?}", head_object_result);
         Ok(head_object_result)
     }
+
+    // What a fuss the error handling stuff is a mess to put together, so split into pieces
+    fn strip_(p: std::path::PathBuf, prefix: &std::path::Path) -> Result<std::path::PathBuf> {
+        let cp_prefix = p.clone();
+        cp_prefix.strip_prefix(prefix).map_err(|_| Error::InvalidPath(p)).map(|x| x.into())
+    }
+
+    fn strip(p: std::path::PathBuf, prefix: &std::path::Path) -> Result<String> {
+        let p = Connection::strip_(p, prefix)?;
+        p.to_str().map(String::from).ok_or_else(|| Error::InvalidPath(p))
+    }
+
+    async fn list_dirs(&self, path: &str) -> Result<Vec<String>> {
+        use std::path::PathBuf;
+
+        let prefix = PathBuf::from(path);
+        for result in self.bucket.list(String::from(path), Some("/".to_string())).await? {
+
+            if let Some(prefs) = result.common_prefixes {
+                return prefs.into_iter().map(|cp| {
+                    Connection::strip(PathBuf::from(cp.prefix), &prefix)
+                }).collect();
+            }
+        }
+        Ok(vec![])
+    }
+
 }
