@@ -11,6 +11,16 @@ async fn main() -> Result<()> {
 
     let args = Options::parse();
 
+    env_logger::Builder::from_env(
+        env_logger::Env::default()
+            .default_filter_or(
+                if args.debug { "debug" }
+                else if args.verbose { "info" }
+                else { "warn" }
+            )).format_timestamp(None).init();
+
+    log::debug!("args={:?}", args);
+
     let bucket = s3_cache::Storage::new(args.bucket.as_str(), args.region.as_str(), args.endpoint.as_str(), false).await?;
 
     match &args.command {
@@ -18,8 +28,7 @@ async fn main() -> Result<()> {
             println!("Upload {:?}",arg);
             s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files).await?;
         },
-        Commands::Download(arg) => {
-            println!("{:?}",arg);
+        Commands::Download(_arg) => {
         },
         Commands::Delete(arg) => {
             println!("{:?}",arg);
@@ -27,8 +36,7 @@ async fn main() -> Result<()> {
         Commands::List(arg) => {
             s3_cache::actions::list(bucket, arg.name.as_deref()).await?;
         },
-        Commands::Expire(arg) => {
-            println!("{:?}",arg);
+        Commands::Expire(_arg) => {
             s3_cache::actions::expire(bucket).await?;
         },
     }
@@ -56,6 +64,14 @@ struct Options {
     /// The S3 region
     #[arg(long, global=true, default_value="global")]
     region: String,
+
+    /// Add additional debug output
+    #[arg(long, global=true)]
+    debug: bool,
+
+    /// Add additional output
+    #[arg(long, global=true)]
+    verbose: bool,
 }
 
 #[derive(clap::Subcommand, Debug)]

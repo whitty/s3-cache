@@ -1494,6 +1494,7 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "faster-hex",
+ "log",
  "rust-s3",
  "serde",
  "serde_json",
