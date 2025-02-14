@@ -50,10 +50,10 @@ async fn meta_for(path: PathBuf) -> Result<Meta> {
     Ok(m)
 }
 
-async fn upload_file(storage: Storage, file: cache::File) -> Result<()> {
+async fn upload_file(storage: Storage, file: cache::File, cache_name: String) -> Result<()> {
     let mut f = tokio::fs::File::open(&file.path).await?;
 
-    let p = file.storage_path("TODO - name");
+    let p = file.storage_path(cache_name.as_str());
     let path = p.to_str().expect("Invalid storage_path -> string");
     println!("Inserting {}", file.path);
     storage.put_file_unless_exists(&mut f, path).await?;
@@ -70,13 +70,12 @@ async fn work_meta_for(path: PathBuf) -> UploadWork {
     UploadWork::Meta(meta_for(path).await)
 }
 
-async fn work_upload(storage: Storage, file: cache::File) -> UploadWork {
-    UploadWork::Upload(upload_file(storage, file).await)
+async fn work_upload(storage: Storage, file: cache::File, cache_name: String) -> UploadWork {
+    UploadWork::Upload(upload_file(storage, file, cache_name).await)
 }
 
-pub async fn expire(storage: Storage) -> Result<()> {
+pub async fn expire(_storage: Storage) -> Result<()> {
     // TODO - just to keep delete from being flagged unused
-    storage.delete("/foo").await?;
     Ok(())
 }
 
@@ -106,16 +105,23 @@ pub async fn upload(storage: Storage,
                 let object = meta.object_path().expect("todo no path should be handled by is_cacheable").to_str().expect("should not generate bad paths").to_owned();
                 let size = meta.file.as_ref().map_or(0, std::fs::Metadata::len);
 
+                // small files should be uploaded under cache and not deduped for deletion
+                // pragmatism
+                let object = if size > 1024 * 1024 * 25 {
+                    Some(object.clone())
+                } else {
+                    None
+                };
 
                 let file = cache::File {
                     path: path.to_owned(),
-                    object: Some(object.clone()),
+                    object,
                     size
                 };
 
                 cache_entry.files.push(file.clone());
 
-                path_set.spawn(work_upload(storage.clone(), file));
+                path_set.spawn(work_upload(storage.clone(), file, cache_name.to_owned()));
             },
 
             UploadWork::Upload(result) => {
