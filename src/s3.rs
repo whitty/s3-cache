@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // (C) Copyright 2025 Greg Whiteley
 
+use std::path::{Path, PathBuf};
+
 use s3::creds::Credentials;
 use s3::region::Region;
 use s3::{Bucket, BucketConfiguration};
@@ -117,9 +119,9 @@ impl Connection {
     async fn exists(&self, path: &str) -> Result<bool> {
         let result = self.head(path).await;
         match result {
-            Ok(r) => {
-                println!("last_modified={}", r.last_modified.unwrap_or("".into()));
-                println!("content_length={}", r.content_length.unwrap_or(0));
+            Ok(_r) => {
+                // println!("last_modified={}", _r.last_modified.unwrap_or("".into()));
+                // println!("content_length={}", _r.content_length.unwrap_or(0));
                 Ok(true)
             },
             Err(Error::S3Error(s3::error::S3Error::HttpFailWithBody(404 ,_))) => Ok(false),
@@ -129,49 +131,51 @@ impl Connection {
 
     async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
         &self, reader: &mut R, s3_path: &str) -> Result<()> {
-        let response = self.bucket.put_object_stream(reader, s3_path).await?;
+        let _response = self.bucket.put_object_stream(reader, s3_path).await?;
 
-        println!("put({}) response={:?} {}", s3_path, response, response.status_code());
-        assert_eq!(response.status_code(), 200);
+        // println!("put({}) response={:?} {}", s3_path, _response, _response.status_code());
+        // assert_eq!(_response.status_code(), 200);
         Ok(())
     }
 
     async fn get_file_stream<W: tokio::io::AsyncWrite + Send + Unpin + ?Sized>(&self, s3_path: &str, w: &mut W) -> Result<()> {
-        let code = self.bucket.get_object_to_writer(s3_path, w).await?;
-        println!("code={}", code);
+        let _code = self.bucket.get_object_to_writer(s3_path, w).await?;
+        // println!("code={}", _code);
         Ok(())
     }
 
     async fn delete(&self, s3_path: &str) -> Result<()> {
-        let response = self.bucket.delete_object(s3_path).await?;
+        let _response = self.bucket.delete_object(s3_path).await?;
 
-        println!("delete({}) response={:?} {}", s3_path, response, response.status_code());
-        assert_eq!(response.status_code(), 204);
+        println!("deleted '{}'", s3_path);
+        // println!("delete({}) response={:?} {}", s3_path, response, response.status_code());
+        // assert_eq!(_response.status_code(), 204);
         Ok(())
     }
 
     async fn head(&self, path: &str) -> Result<s3::serde_types::HeadObjectResult> {
-        let (head_object_result, code) = self.bucket.head_object(path).await?;
+        let (head_object_result, _code) = self.bucket.head_object(path).await?;
 
-        println!("code={}", code);
-        println!("head_object_result={:?}", head_object_result);
+        // println!("code={}", _code);
+        // println!("head_object_result={:?}", head_object_result);
         Ok(head_object_result)
     }
 
     // What a fuss the error handling stuff is a mess to put together, so split into pieces
-    fn strip_(p: std::path::PathBuf, prefix: &std::path::Path) -> Result<std::path::PathBuf> {
+    fn strip_(p: PathBuf, prefix: &std::path::Path) -> Result<PathBuf> {
         let cp_prefix = p.clone();
         cp_prefix.strip_prefix(prefix).map_err(|_| Error::InvalidPath(p)).map(|x| x.into())
     }
 
-    fn strip(p: std::path::PathBuf, prefix: &std::path::Path) -> Result<String> {
-        let p = Connection::strip_(p, prefix)?;
-        p.to_str().map(String::from).ok_or_else(|| Error::InvalidPath(p))
+    fn strip(p: PathBuf, prefix: &std::path::Path) -> Result<String> {
+        Self::path_to_str(Connection::strip_(p, prefix)?.as_ref())
+    }
+
+    fn path_to_str(p: &Path) -> Result<String> {
+        p.to_str().map(String::from).ok_or_else(|| Error::InvalidPath(PathBuf::from(p)))
     }
 
     async fn list_dirs(&self, path: &str) -> Result<Vec<String>> {
-        use std::path::PathBuf;
-
         let prefix = PathBuf::from(path);
         for result in self.bucket.list(String::from(path), Some("/".to_string())).await? {
 
