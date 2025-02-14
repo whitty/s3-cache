@@ -86,6 +86,17 @@ impl Storage {
         connection.list_dirs(path).await
     }
 
+    pub async fn recursive_delete_p(&self, path: &Path) -> Result<()> {
+        self.recursive_delete(Connection::path_to_str(path)?.as_ref()).await
+    }
+
+    pub async fn recursive_delete(&self, path: &str) -> Result<()> {
+        // Async variant with `tokio` or `async-std` features
+        let connection = self.connect().await?;
+
+        connection.recursive_delete(path).await
+    }
+
     pub async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
         &self, reader: &mut R, s3_path: &str) -> Result<()> {
 
@@ -188,4 +199,25 @@ impl Connection {
         Ok(vec![])
     }
 
+    #[async_recursion::async_recursion]
+    async fn recursive_delete(&self, path: &str) -> Result<()> {
+        for result in self.bucket.list(String::from(path), Some("/".to_string())).await? {
+
+            for file in result.contents {
+                if self.delete(&file.key).await.is_err() {
+                    println!("Error deleting '{:?}', continuing...", &file.key);
+                }
+            }
+
+            if let Some(prefs) = result.common_prefixes {
+                for pref in prefs {
+                    if self.recursive_delete(pref.prefix.as_str()).await.is_err() {
+                        println!("Error deleting '{:?}', continuing...", &pref.prefix);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }

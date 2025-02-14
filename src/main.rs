@@ -25,13 +25,12 @@ async fn main() -> Result<()> {
 
     match &args.command {
         Commands::Upload(arg) => {
-            println!("Upload {:?}",arg);
             s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files).await?;
         },
         Commands::Download(_arg) => {
         },
         Commands::Delete(arg) => {
-            println!("{:?}",arg);
+            s3_cache::actions::delete(bucket, arg.cache.name.as_str()).await?;
         },
         Commands::List(arg) => {
             s3_cache::actions::list(bucket, arg.name.as_deref()).await?;

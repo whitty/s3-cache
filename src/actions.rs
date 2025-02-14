@@ -98,7 +98,6 @@ pub async fn upload(storage: Storage,
             UploadWork::Meta(meta) => {
                 let meta = meta.with_context(|| "Failed to load metadata")?;
 
-
                 if !meta.is_cacheable() {
                     continue;
                 }
@@ -158,5 +157,16 @@ pub async fn list(storage: Storage, cache_name: Option<&str>) -> Result<()> {
             println!("{}", c);
         }
     }
+    Ok(())
+}
+
+pub async fn delete(storage: Storage, cache_name: &str) -> Result<()> {
+    if let Err(e) = read_cache_info(&storage, cache_name).await {
+        println!("Cache {} not found:{}", cache_name, e);
+    }
+
+    let mut path = Cache::entry_location(cache_name);
+    path.pop();
+    storage.recursive_delete_p(path.as_ref()).await?;
     Ok(())
 }
