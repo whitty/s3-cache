@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use s3_cache::Result;
+use std::path::PathBuf;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -27,7 +28,8 @@ async fn main() -> Result<()> {
         Commands::Upload(arg) => {
             s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files).await?;
         },
-        Commands::Download(_arg) => {
+        Commands::Download(arg) => {
+            s3_cache::actions::download(bucket, arg.cache.name.as_str(), arg.outpath.clone()).await?;
         },
         Commands::Delete(arg) => {
             s3_cache::actions::delete(bucket, arg.cache.name.as_str()).await?;
@@ -97,7 +99,7 @@ struct CacheArgs {
 #[derive(clap::Args, Debug)]
 struct Upload {
     /// Files to cache and upload
-    files: Vec<std::path::PathBuf>,
+    files: Vec<PathBuf>,
 
     #[command(flatten)]
     cache: CacheArgs,
@@ -107,6 +109,10 @@ struct Upload {
 struct Download {
     #[command(flatten)]
     cache: CacheArgs,
+
+    /// Where to put the output
+    #[arg(long, short='o', default_value=".")]
+    outpath: PathBuf
 }
 
 #[derive(clap::Args, Debug)]
