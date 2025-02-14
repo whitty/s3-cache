@@ -3,7 +3,6 @@
 
 use anyhow::Context;
 use async_std::path::PathBuf;
-use s3::Bucket;
 
 use crate::{Result, cache::{self, Cache}, Storage};
 
