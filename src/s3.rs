@@ -142,36 +142,36 @@ impl Connection {
     }
 
     async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
-        &self, reader: &mut R, s3_path: &str) -> Result<()> {
-        let response = self.bucket.put_object_stream(reader, s3_path).await?;
+        &self, reader: &mut R, s3_path: impl AsRef<str>) -> Result<()> {
+        let response = self.bucket.put_object_stream(reader, s3_path.as_ref()).await?;
 
         if response.status_code() != 200 {
-            log::warn!("put_file: unexpected response {} putting {}", response.status_code(), s3_path);
+            log::warn!("put_file: unexpected response {} putting {}", response.status_code(), s3_path.as_ref());
         }
         Ok(())
     }
 
-    async fn get_file_stream<W: tokio::io::AsyncWrite + Send + Unpin + ?Sized>(&self, s3_path: &str, w: &mut W) -> Result<()> {
-        let code = self.bucket.get_object_to_writer(s3_path, w).await?;
+    async fn get_file_stream<W: tokio::io::AsyncWrite + Send + Unpin + ?Sized>(&self, s3_path: impl AsRef<str>, w: &mut W) -> Result<()> {
+        let code = self.bucket.get_object_to_writer(s3_path.as_ref(), w).await?;
 
         if code != 200 {
-            log::warn!("get_file_stream: unexpected response {} getting {}", code, s3_path);
+            log::warn!("get_file_stream: unexpected response {} getting {}", code, s3_path.as_ref());
         }
         Ok(())
     }
 
-    async fn delete(&self, s3_path: &str) -> Result<()> {
-        let response = self.bucket.delete_object(s3_path).await?;
+    async fn delete(&self, s3_path: impl AsRef<str>) -> Result<()> {
+        let response = self.bucket.delete_object(s3_path.as_ref()).await?;
 
-        log::info!("deleted '{}'", s3_path);
+        log::info!("deleted '{}'", s3_path.as_ref());
 
         if response.status_code() != 204 {
-            log::warn!("delete: unexpected response {} deleting {}", response.status_code(), s3_path);
+            log::warn!("delete: unexpected response {} deleting {}", response.status_code(), s3_path.as_ref());
         }
         Ok(())
     }
 
-    async fn head(&self, path: &str) -> Result<s3::serde_types::HeadObjectResult> {
+    async fn head(&self, path: impl AsRef<str>) -> Result<s3::serde_types::HeadObjectResult> {
         let (head_object_result, _code) = self.bucket.head_object(path).await?;
         Ok(head_object_result)
     }
@@ -190,9 +190,9 @@ impl Connection {
         p.to_str().map(String::from).ok_or_else(|| Error::InvalidPath(PathBuf::from(p)))
     }
 
-    async fn list_dirs(&self, path: &str) -> Result<Vec<String>> {
-        let prefix = PathBuf::from(path);
-        for result in self.bucket.list(String::from(path), Some("/".to_string())).await? {
+    async fn list_dirs(&self, path: impl AsRef<str>) -> Result<Vec<String>> {
+        let prefix = PathBuf::from(path.as_ref());
+        for result in self.bucket.list(String::from(path.as_ref()), Some("/".to_string())).await? {
 
             if let Some(prefs) = result.common_prefixes {
                 return prefs.into_iter().map(|cp| {
