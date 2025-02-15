@@ -203,25 +203,39 @@ impl Connection {
         Ok(vec![])
     }
 
-    #[async_recursion::async_recursion]
-    async fn recursive_delete(&self, path: &str) -> Result<()> {
-        for result in self.bucket.list(String::from(path), Some("/".to_string())).await? {
+    async fn recursive_visit_<F, Fut>(&self, path: impl AsRef<str>, f: F) -> Result<()>
+     where F: Sync + Send + Fn(String) -> Fut,
+           Fut: std::future::Future<Output = Result<()>>
+    {
+        let mut work = Vec::<String>::new();
+        work.push(String::from(path.as_ref()));
 
-            for file in result.contents {
-                if self.delete(&file.key).await.is_err() {
-                    log::warn!("Error deleting '{:?}', continuing...", &file.key);
+        while let Some(path) = work.pop() {
+
+            for result in self.bucket.list(path, Some("/".to_string())).await? {
+
+                for file in result.contents {
+                    f(file.key.to_owned()).await?;
                 }
-            }
 
-            if let Some(prefs) = result.common_prefixes {
-                for pref in prefs {
-                    if self.recursive_delete(pref.prefix.as_str()).await.is_err() {
-                        log::warn!("Error deleting '{:?}', continuing...", &pref.prefix);
+                if let Some(prefs) = result.common_prefixes {
+                    for pref in prefs {
+                        work.push(pref.prefix);
                     }
                 }
             }
         }
 
         Ok(())
+    }
+
+    async fn recursive_delete(&self, path: impl AsRef<str>) -> Result<()> {
+        self.recursive_visit_(path, |x| async {
+            let p = x.clone();
+            if let Err(e) = self.delete(x).await {
+                log::warn!("Error deleting '{:?}': {}, continuing...", p, e);
+            }
+            Ok(()) // squash the error and continue
+        }).await
     }
 }
