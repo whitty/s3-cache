@@ -72,7 +72,7 @@ impl Storage {
         let connection = self.connect().await?;
 
         if connection.exists(s3_path).await? {
-            println!("File {} exists", s3_path);
+            log::info!("File {} exists, not putting", s3_path);
             return Ok(());
         }
 
@@ -131,8 +131,9 @@ impl Connection {
         let result = self.head(path).await;
         match result {
             Ok(_r) => {
-                // println!("last_modified={}", _r.last_modified.unwrap_or("".into()));
-                // println!("content_length={}", _r.content_length.unwrap_or(0));
+                log::debug!("exists: {} last_modified={} content_length={}", path,
+                            _r.last_modified.unwrap_or("".into()),
+                            _r.content_length.unwrap_or(0));
                 Ok(true)
             },
             Err(Error::S3Error(s3::error::S3Error::HttpFailWithBody(404 ,_))) => Ok(false),
@@ -142,33 +143,36 @@ impl Connection {
 
     async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
         &self, reader: &mut R, s3_path: &str) -> Result<()> {
-        let _response = self.bucket.put_object_stream(reader, s3_path).await?;
+        let response = self.bucket.put_object_stream(reader, s3_path).await?;
 
-        // println!("put({}) response={:?} {}", s3_path, _response, _response.status_code());
-        // assert_eq!(_response.status_code(), 200);
+        if response.status_code() != 200 {
+            log::warn!("put_file: unexpected response {} putting {}", response.status_code(), s3_path);
+        }
         Ok(())
     }
 
     async fn get_file_stream<W: tokio::io::AsyncWrite + Send + Unpin + ?Sized>(&self, s3_path: &str, w: &mut W) -> Result<()> {
-        let _code = self.bucket.get_object_to_writer(s3_path, w).await?;
-        // println!("code={}", _code);
+        let code = self.bucket.get_object_to_writer(s3_path, w).await?;
+
+        if code != 200 {
+            log::warn!("get_file_stream: unexpected response {} getting {}", code, s3_path);
+        }
         Ok(())
     }
 
     async fn delete(&self, s3_path: &str) -> Result<()> {
-        let _response = self.bucket.delete_object(s3_path).await?;
+        let response = self.bucket.delete_object(s3_path).await?;
 
-        println!("deleted '{}'", s3_path);
-        // println!("delete({}) response={:?} {}", s3_path, response, response.status_code());
-        // assert_eq!(_response.status_code(), 204);
+        log::info!("deleted '{}'", s3_path);
+
+        if response.status_code() != 204 {
+            log::warn!("delete: unexpected response {} deleting {}", response.status_code(), s3_path);
+        }
         Ok(())
     }
 
     async fn head(&self, path: &str) -> Result<s3::serde_types::HeadObjectResult> {
         let (head_object_result, _code) = self.bucket.head_object(path).await?;
-
-        // println!("code={}", _code);
-        // println!("head_object_result={:?}", head_object_result);
         Ok(head_object_result)
     }
 
@@ -205,14 +209,14 @@ impl Connection {
 
             for file in result.contents {
                 if self.delete(&file.key).await.is_err() {
-                    println!("Error deleting '{:?}', continuing...", &file.key);
+                    log::warn!("Error deleting '{:?}', continuing...", &file.key);
                 }
             }
 
             if let Some(prefs) = result.common_prefixes {
                 for pref in prefs {
                     if self.recursive_delete(pref.prefix.as_str()).await.is_err() {
-                        println!("Error deleting '{:?}', continuing...", &pref.prefix);
+                        log::warn!("Error deleting '{:?}', continuing...", &pref.prefix);
                     }
                 }
             }

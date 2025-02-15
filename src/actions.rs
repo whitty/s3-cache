@@ -40,13 +40,14 @@ impl Meta {
 }
 
 async fn meta_for(path: PathBuf) -> Result<Meta> {
+    log::debug!("Fetching metadata for {:?}", &path);
+
     let mut m = Meta::new(path);
     m.resolve().await?;
 
     if m.file.as_ref().map_or(true, std::fs::Metadata::is_file) {
         m.hash = Some(cache::read_hash(m.path.as_path(), &m.file.as_ref().map(std::fs::Metadata::len)).await?);
     }
-
     Ok(m)
 }
 
@@ -56,6 +57,7 @@ async fn download_file(storage: Storage, file: cache::File, cache_name: String, 
 
     if let Some(p) = base.parent() {
         if p != base && ! p.is_dir().await {
+            log::info!("creating directory {:?} for {:?}", &p, &base);
             std::fs::create_dir_all(p)?;
         }
     }
@@ -64,6 +66,7 @@ async fn download_file(storage: Storage, file: cache::File, cache_name: String, 
 
     let p = file.storage_path(cache_name.as_str());
     let object_path = p.to_str().expect("Invalid storage_path -> string");
+    log::debug!("Downloading {:?} from {}", base, object_path);
     storage.get_file(&mut f, object_path).await?;
     Ok(())
 }
@@ -73,7 +76,7 @@ async fn upload_file(storage: Storage, file: cache::File, cache_name: String) ->
 
     let p = file.storage_path(cache_name.as_str());
     let path = p.to_str().expect("Invalid storage_path -> string");
-    println!("Inserting {}", file.path);
+    log::info!("Inserting {}", file.path);
     storage.put_file_unless_exists(&mut f, path).await?;
 
     Ok(())
@@ -107,6 +110,8 @@ pub async fn upload(storage: Storage,
     }
 
     let mut cache_entry = cache::Cache::default();
+
+    log::debug!("Dispatching upload processing jobs...");
     while let Some(work) = path_set.join_next().await {
         // JoinError
         let work = work.with_context(|| "Failure waiting on upload work")?;
@@ -114,6 +119,10 @@ pub async fn upload(storage: Storage,
         match work {
             UploadWork::Meta(meta) => {
                 let meta = meta.with_context(|| "Failed to load metadata")?;
+
+                log::debug!("{:?}\tmeta={:?} size={:?} path={:?}",
+                            meta.path.to_str(), meta, meta.file.as_ref().map_or(0, |x| { x.len() }),
+                            meta.object_path());
 
                 if !meta.is_cacheable() {
                     continue;
@@ -149,9 +158,8 @@ pub async fn upload(storage: Storage,
     }
 
     let path = Cache::entry_location(cache_name);
+    log::debug!("Pushing cache entry with {} files to {:?}", cache_entry.files.len(), path);
     storage.put_file(&mut std::io::Cursor::new(cache_entry.into_string()), path.to_str().unwrap()).await?;
-
-    // would be nice to start work when the first arrives instead,...
 
     Ok(())
 }
@@ -203,6 +211,7 @@ pub async fn download(storage: Storage, cache_name: &str, outpath: std::path::Pa
         download_set.spawn(work_download(storage.clone(), f.clone(), cache_name.to_owned(), outpath.clone().into()));
     }
 
+    log::debug!("Dispatching download jobs...");
     while let Some(work) = download_set.join_next().await {
         // JoinError
         let work = work.with_context(|| "Failure waiting on download jobs")?;
@@ -219,7 +228,7 @@ pub async fn download(storage: Storage, cache_name: &str, outpath: std::path::Pa
 
 pub async fn delete(storage: Storage, cache_name: &str) -> Result<()> {
     if let Err(e) = read_cache_info(&storage, cache_name).await {
-        println!("Cache {} not found:{}", cache_name, e);
+        log::warn!("Cache {} not found:{}", cache_name, e);
     }
 
     let mut path = Cache::entry_location(cache_name);
