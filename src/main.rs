@@ -4,6 +4,7 @@
 use clap::Parser;
 use s3_cache::Result;
 use std::path::PathBuf;
+use::std::io::Write;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -12,13 +13,19 @@ async fn main() -> Result<()> {
 
     let args = Options::parse();
 
-    env_logger::Builder::from_env(
+    let mut logger = env_logger::Builder::from_env(
         env_logger::Env::default()
             .default_filter_or(
                 if args.debug { "debug" }
                 else if args.verbose { "info" }
                 else { "warn" }
-            )).format_timestamp(None).init();
+            ));
+    if !args.debug {
+        logger.format(|buf, record| {
+            writeln!(buf, "{}", record.args())
+        });
+    }
+    logger.format_timestamp(None).init();
 
     log::debug!("args={:?}", args);
 
