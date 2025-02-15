@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
 
     match &args.command {
         Commands::Upload(arg) => {
-            s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files).await?;
+            s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files, arg.threshold).await?;
         },
         Commands::Download(arg) => {
             s3_cache::actions::download(bucket, arg.cache.name.as_str(), arg.outpath.clone()).await?;
@@ -110,6 +110,11 @@ struct Upload {
 
     #[command(flatten)]
     cache: CacheArgs,
+
+    /// Dedupe file threshold size in bytes: files below this size
+    /// will just be stored with the cache and not deduplicated
+    #[arg(long, default_value_t=25*1024*1024)]
+    threshold: usize,
 }
 
 #[derive(clap::Args, Debug)]

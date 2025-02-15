@@ -101,7 +101,8 @@ pub async fn expire(_storage: Storage) -> Result<()> {
 }
 
 pub async fn upload(storage: Storage,
-                    cache_name: &str, paths: &[std::path::PathBuf] ) -> Result<()> {
+                    cache_name: &str, paths: &[std::path::PathBuf],
+                    cache_threshold: usize) -> Result<()> {
 
     let mut path_set = tokio::task::JoinSet::<UploadWork>::new();
 
@@ -134,7 +135,7 @@ pub async fn upload(storage: Storage,
 
                 // small files should be uploaded under cache and not deduped for deletion
                 // pragmatism
-                let object = if size > 1024 * 1024 * 25 {
+                let object = if size > cache_threshold.try_into().expect("usize should if in u64") {
                     Some(object.clone())
                 } else {
                     None
