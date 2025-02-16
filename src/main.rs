@@ -9,7 +9,7 @@ use::std::io::Write;
 #[tokio::main]
 async fn main() -> Result<()> {
     // .env support in aid of Credentials::default()
-    dotenvy::dotenv()?;
+    let dotenv = dotenvy::dotenv();
 
     let args = Options::parse();
 
@@ -27,9 +27,15 @@ async fn main() -> Result<()> {
     }
     logger.format_timestamp(None).init();
 
+    if let Ok(path) = dotenv {
+        log::info!("Loaded environment from {:?}", path);
+    }
     log::debug!("args={:?}", args);
 
-    let bucket = s3_cache::Storage::new(args.bucket.as_str(), args.region.as_str(), args.endpoint.as_str(), false).await?;
+    let bucket = s3_cache::Storage::new(args.bucket.as_str(), args.region.as_str(), args.endpoint.as_str(), false).await
+        .map_err(|e| {
+            println!("\nFailed to initialise connection to S3.\n\nCheck AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment\nvariables are set.\n"); e
+        })?;
 
     match &args.command {
         Commands::Upload(arg) => {
@@ -55,7 +61,11 @@ async fn main() -> Result<()> {
 #[command(author, version, long_about =
 "Deduplicating temporary store in S3 for CI artifacts
 
-TBD fill in more details
+AWS credentials are loaded from environment variables (or .env
+file). eg:
+
+   AWS_ACCESS_KEY_ID=8dq14eEakqwmEko9XjUd
+   AWS_SECRET_ACCESS_KEY=0TX3ZyiadJIC7w7NPqbeu7VzKcbHDheVovq7UB9rOBw
 ")]
 struct Options {
     #[command(subcommand)]
