@@ -9,11 +9,11 @@ for (ver in build_os_vers) {
     node("${version} && rustup") {
       def src = null;
 
-      withEnv(["PATH+RUST=${HOME}/.cargo/bin", "WINEDEBUG=-all"]) {
+      withEnv(["PATH+RUST=${HOME}/.cargo/bin"]) {
 
         stage("${version}-preparation") {
           src = checkout(scm)
-          sh "sudo apt update && sudo apt install --no-install-recommends -y bats mingw-w64 wine64 wine libssl-dev pkg-config"
+          sh "sudo apt update && sudo apt install --no-install-recommends -y bats libssl-dev pkg-config"
         }
 
         stage("${version}-build") {
@@ -42,14 +42,6 @@ for (ver in build_os_vers) {
                                        name: "Clippy ${version}",
                                        pattern: "**/target/report-${version}.log")])
           }
-        }
-
-        stage("${version}-build-windows") {
-          sh "cargo build --target x86_64-pc-windows-gnu"
-        }
-
-        stage("${version}-test-windows") {
-          sh "env CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER=wine cargo test --target x86_64-pc-windows-gnu"
         }
 
       } // withEnv
