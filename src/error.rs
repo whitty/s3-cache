@@ -22,4 +22,14 @@ pub enum Error {
 
     #[error("Error creating bucket: {0}")]
     BucketCreationError(s3::error::S3Error),
+
+    #[error("I'm lazy, you'll never see this")]
+    OptionWasNoneError,
+
+    #[error("Time parse error: {0}")]
+    DateTimeParseError(chrono::ParseError),
+
+    #[error("Unable to determine expiry time from {0} days")]
+    ExpiryAgeConversionError(u32),
+
 }

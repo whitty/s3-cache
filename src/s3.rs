@@ -119,6 +119,12 @@ impl Storage {
 
         connection.delete(s3_path).await
     }
+
+    pub async fn recursive_expire(&self, path: impl AsRef<str>,
+                                  expiry_time: chrono::DateTime<chrono::Utc>) -> Result<()> {
+        let connection = self.connect().await?;
+        connection.recursive_expire(path, expiry_time).await
+    }
 }
 
 struct Connection {
@@ -238,4 +244,43 @@ impl Connection {
             Ok(()) // squash the error and continue
         }).await
     }
+
+    async fn recursive_expire(&self, path: impl AsRef<str>,
+                              expiry_time: chrono::DateTime<chrono::Utc>) -> Result<()> {
+        log::debug!("recursive_expire {} older than {}", path.as_ref(), &expiry_time);
+        self.recursive_visit_(path, |obj_path| async {
+            let p = obj_path.clone();
+
+            match self.head(obj_path).await {
+                Ok(result) => {
+                    match result.last_modified.ok_or(Error::OptionWasNoneError)
+                        .and_then(|d| chrono::DateTime::parse_from_rfc2822(d.as_ref())
+                                  .map_err(Error::DateTimeParseError)) {
+                            Ok(modified) => {
+                                if modified < expiry_time {
+                                    if let Err(e) =  self.delete(&p).await {
+                                        log::info!("Failed to delete expired object '{:?}': {}: continuing...", &p, e);
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                log::info!("Unable to find modification time while expiring '{:?}': {}: continuing...", &p, e);
+                                if let Err(e) = self.delete(&p).await {
+                                    log::debug!("Delete failed on object '{:?}' that doesn't have valid modification time: {}", p, e);
+                                }
+                            }
+                    }
+                },
+                Err(e) => {
+                    // if its not there - try deleting it
+                    log::warn!("Error calling head while expiring '{:?}': {}: expiring it...", &p, e);
+                    if let Err(e) = self.delete(&p).await {
+                        log::debug!("Delete failed on object '{:?}' that doesn't respond to head: {}", p, e);
+                    }
+                }
+            }
+            Ok(()) // squash the error and continue
+        }).await
+    }
+
 }

@@ -95,8 +95,13 @@ async fn work_upload(storage: Storage, file: cache::File, cache_name: String) ->
     UploadWork::Upload(upload_file(storage, file, cache_name).await)
 }
 
-pub async fn expire(_storage: Storage) -> Result<()> {
-    // TODO - just to keep delete from being flagged unused
+pub async fn expire(storage: Storage, age_days: u32) -> Result<()> {
+    let now = chrono::Utc::now();
+    let expiry_time = now.checked_sub_days(
+        chrono::Days::new(age_days as u64))
+        .ok_or(crate::Error::ExpiryAgeConversionError(age_days))?;
+
+    storage.recursive_expire("objects/", expiry_time).await?;
     Ok(())
 }
 

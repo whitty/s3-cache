@@ -44,8 +44,8 @@ async fn main() -> Result<()> {
         Commands::List(arg) => {
             s3_cache::actions::list(bucket, arg.name.as_deref()).await?;
         },
-        Commands::Expire(_arg) => {
-            s3_cache::actions::expire(bucket).await?;
+        Commands::Expire(arg) => {
+            s3_cache::actions::expire(bucket, arg.days).await?;
         },
     }
     Ok(())
@@ -92,7 +92,8 @@ enum Commands {
     Delete(Delete),
     /// List files from a cache
     List(List),
-    /// Expire old or unused files from cache
+
+    /// Expire old or unused files from cache.  Currently only age is implemented.
     Expire(Expire),
 }
 
@@ -142,6 +143,10 @@ struct Delete {
 
 #[derive(clap::Args, Debug)]
 struct Expire {
+
+    /// Age of objects to expire unconditionally
+    #[arg(long, default_value_t=14)]
+    days: u32,
 }
 
 // Claps' built-in self test
