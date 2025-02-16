@@ -30,3 +30,12 @@ faster-hex = "0.10.0"
 serde_json = "1.0.138"
 serde = "1.0.217"
 chrono = "0.4.39"
+
+[profile.release]
+# codegen units increase compile paralellism, but the optimiser sees
+# less of the code together.
+codegen-units = 1
+# Abort on panic - reduces size, by removing exception stack unwinding
+# panic = 'abort'
+strip = true
+lto = true
