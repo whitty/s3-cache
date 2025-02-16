@@ -1,0 +1,8 @@
+target/
+.git/
+output/
+Dockerfile
+*~
+.jenkinsfile
+README.md
+.env
