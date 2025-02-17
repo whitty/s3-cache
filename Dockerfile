@@ -1,4 +1,4 @@
-FROM rust:1.75 as builder
+FROM rust:1.83 as builder
 
 WORKDIR /usr/src/s3-cache
 # Pre-build deps based on Cargo.toml, so we can make small changes during development
