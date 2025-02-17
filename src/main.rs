@@ -33,8 +33,8 @@ async fn main() -> Result<()> {
     log::debug!("args={:?}", args);
 
     let bucket = s3_cache::Storage::new(args.bucket.as_str(), args.region.as_str(), args.endpoint.as_str(), false).await
-        .map_err(|e| {
-            println!("\nFailed to initialise connection to S3.\n\nCheck AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment\nvariables are set.\n"); e
+        .inspect_err(|_| {
+            println!("\nFailed to initialise connection to S3.\n\nCheck AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment\nvariables are set.\n");
         })?;
 
     match &args.command {
