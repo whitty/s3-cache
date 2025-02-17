@@ -15,7 +15,7 @@ categories = ["command-line-utilities", "CI"]
 exclude = [".jenkinsfile"]
 
 [dependencies]
-clap = { version = "=4.5.8", features = ["wrap_help", "derive"] }
+clap = { version = "4.5.8", features = ["wrap_help", "derive"] }
 rust-s3 = { version = "0.35.1", features = ["with-tokio"] }
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "fs"] }
 async-std = { version = "1", features = ["attributes"] }
