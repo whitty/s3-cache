@@ -16,11 +16,17 @@ pub struct Storage {
     bucket_name: String,
     region: Region,
     credentials: Credentials,
+    accept_invalid_certs: bool,
 }
 
 impl Storage {
 
+    // TODO replace this with a builder
     pub async fn new(bucket_name: &str, region: &str, endpoint: &str, create: bool) -> Result<Storage> {
+        Self::new_dangerous(bucket_name, region, endpoint, create, false).await
+    }
+
+    pub async fn new_dangerous(bucket_name: &str, region: &str, endpoint: &str, create: bool, accept_invalid_certs: bool) -> Result<Storage> {
 
         let region = Region::Custom {
             region: region.to_owned(),
@@ -32,6 +38,7 @@ impl Storage {
         let s = Storage {
             bucket_name: bucket_name.to_owned(),
             region, credentials,
+            accept_invalid_certs,
         };
 
         match s.connect().await {
@@ -50,6 +57,7 @@ impl Storage {
 
     async fn connect(&self) -> Result<Connection> {
         let bucket = Bucket::new(self.bucket_name.as_str(), self.region.clone(), self.credentials.clone())?
+            .set_dangereous_config(self.accept_invalid_certs, false)?
             .with_path_style();
         if !bucket.exists().await? {
             return Err(Error::BucketNotFound(self.bucket_name.to_owned()))

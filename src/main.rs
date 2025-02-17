@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
     }
     log::debug!("args={:?}", args);
 
-    let bucket = s3_cache::Storage::new(args.bucket.as_str(), args.region.as_str(), args.endpoint.as_str(), false).await
+    let bucket = s3_cache::Storage::new_dangerous(args.bucket.as_str(), args.region.as_str(), args.endpoint.as_str(), false, args.skip_cert_validation).await
         .inspect_err(|_| {
             println!("\nFailed to initialise connection to S3.\n\nCheck AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment\nvariables are set.\n");
         })?;
@@ -82,6 +82,10 @@ struct Options {
     /// The S3 region
     #[arg(long, global=true, default_value="global", env="S3_CACHE_REGION")]
     region: String,
+
+    /// Skip HTTPS certificate validation.  This affects security.  Use with care.
+    #[arg(long, global=true, env="S3_CACHE_SKIP_CERT_VALIDATION")]
+    skip_cert_validation: bool,
 
     /// Add additional debug output
     #[arg(long, global=true)]
