@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// (C) Copyright 2025 Greg Whiteley
+
 pub mod error;
 pub mod s3;
 pub mod actions;
