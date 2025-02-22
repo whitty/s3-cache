@@ -142,9 +142,20 @@ struct Connection {
 impl Connection {
 
     async fn check_connect(&self) -> Result<bool> {
-        if !self.bucket.exists().await? {
-            return Err(Error::BucketNotFound(self.bucket.name.to_owned()))
+        // Doesn't work set_dangereous_config - so fake it with list_dirs
+        // if !self.bucket.exists().await? {
+        //     return Err(Error::BucketNotFound(self.bucket.name.to_owned()))
+        // }
+
+        let result = self.bucket.list(String::from(""), Some(String::from("/"))).await;
+        if let Err(s3::error::S3Error::HttpFailWithBody(404, message)) = result {
+            if message.contains("NoSuchBucket") {
+                return Err(Error::BucketNotFound(self.bucket.name.to_owned()));
+            } else {
+                return Err(s3::error::S3Error::HttpFailWithBody(404, message).into());
+            }
         }
+        result?;
         Ok(true)
     }
 
