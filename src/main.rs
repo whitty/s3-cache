@@ -72,15 +72,15 @@ struct Options {
     command: Commands,
 
     /// The S3 Bucket
-    #[arg(long, global=true, default_value="s3-cache-test")] // TODO default name
+    #[arg(long, global=true, default_value="s3-cache-test", env="S3_CACHE_BUCKET")] // TODO default name
     bucket: String,
 
     /// The S3 endpoint
-    #[arg(long, global=true, default_value="http://localhost:9000")]
+    #[arg(long, global=true, default_value="http://localhost:9000", env="S3_CACHE_ENDPOINT")]
     endpoint: String,
 
     /// The S3 region
-    #[arg(long, global=true, default_value="global")]
+    #[arg(long, global=true, default_value="global", env="S3_CACHE_REGION")]
     region: String,
 
     /// Add additional debug output
