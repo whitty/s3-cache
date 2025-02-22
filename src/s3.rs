@@ -59,10 +59,10 @@ impl Storage {
         let bucket = Bucket::new(self.bucket_name.as_str(), self.region.clone(), self.credentials.clone())?
             .set_dangereous_config(self.accept_invalid_certs, false)?
             .with_path_style();
-        if !bucket.exists().await? {
-            return Err(Error::BucketNotFound(self.bucket_name.to_owned()))
-        }
-        Ok(Connection { bucket })
+
+        let connection = Connection { bucket };
+        connection.check_connect().await?;
+        Ok(connection)
     }
 
     async fn create(&self) -> Result<Connection> {
@@ -140,6 +140,13 @@ struct Connection {
 }
 
 impl Connection {
+
+    async fn check_connect(&self) -> Result<bool> {
+        if !self.bucket.exists().await? {
+            return Err(Error::BucketNotFound(self.bucket.name.to_owned()))
+        }
+        Ok(true)
+    }
 
     async fn exists(&self, path: &str) -> Result<bool> {
         let result = self.head(path).await;
