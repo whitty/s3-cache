@@ -3,6 +3,7 @@
 
 use anyhow::Context;
 use async_std::path::PathBuf;
+use std::os::unix::fs::PermissionsExt;
 
 use crate::{Result, cache::{self, Cache}, Storage};
 
@@ -52,22 +53,28 @@ async fn meta_for(path: PathBuf) -> Result<Meta> {
 }
 
 async fn download_file(storage: Storage, file: cache::File, cache_name: String, base: PathBuf) -> Result<()> {
-    let mut base = base;
-    base.push(&file.path);
+    let mut path = base;
+    path.push(&file.path);
 
-    if let Some(p) = base.parent() {
-        if p != base && ! p.is_dir().await {
-            log::info!("creating directory {:?} for {:?}", &p, &base);
+    if let Some(p) = path.parent() {
+        if p != path && ! p.is_dir().await {
+            log::info!("creating directory {:?} for {:?}", &p, &path);
             std::fs::create_dir_all(p)?;
         }
     }
 
-    let mut f = tokio::fs::File::create(&base).await?;
+    let mut f = tokio::fs::File::create(&path).await?;
 
     let p = file.storage_path(cache_name.as_str());
     let object_path = p.to_str().expect("Invalid storage_path -> string");
-    log::debug!("Downloading {:?} from {}", base, object_path);
+    log::debug!("Downloading {:?} from {}", path, object_path);
     storage.get_file(&mut f, object_path).await?;
+
+    if let Some(mode) = file.mode {
+        if let Err(e) = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)) {
+            log::warn!("Failed to set permissions on {}: {}", path.to_str().unwrap(), e.kind());
+        }
+    }
     Ok(())
 }
 
@@ -137,6 +144,9 @@ pub async fn upload(storage: Storage,
                 let path = meta.path.to_str().expect("bad paths should be handled by is_cacheable");
                 let object = meta.object_path().expect("todo no path should be handled by is_cacheable").to_str().expect("should not generate bad paths").to_owned();
                 let size = meta.file.as_ref().map_or(0, std::fs::Metadata::len);
+                let mode = meta.file.as_ref().map(|meta| {
+                    meta.permissions().mode()
+                });
 
                 // small files should be uploaded under cache and not deduped for deletion
                 // pragmatism
@@ -149,7 +159,8 @@ pub async fn upload(storage: Storage,
                 let file = cache::File {
                     path: path.to_owned(),
                     object,
-                    size
+                    size,
+                    mode,
                 };
 
                 cache_entry.files.push(file.clone());

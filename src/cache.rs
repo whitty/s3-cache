@@ -53,6 +53,7 @@ pub(crate) struct File {
     pub path: String,
     pub object: Option<String>,
     pub size: u64,
+    pub mode: Option<u32>,
 }
 
 impl File {
@@ -103,13 +104,13 @@ mod test {
 
         // Round trip of version container
         let mut c = Cache::default();
-        c.files.push(File{ path: "foo.exe".into(), object: Some("aa/bb/cc/dddd".into()), size: 123456 });
+        c.files.push(File{ path: "foo.exe".into(), object: Some("aa/bb/cc/dddd".into()), size: 123456, mode: Some(0o100664) });
         let v = CacheVersions::V1(c);
         let x = serde_json::to_string(&v).unwrap();
 
         let inp: CacheVersions = serde_json::from_str(r#" {
 "v1": {
-    "files":[{"path":"foo.exe","object":"aa/bb/cc/dddd","size":123456}]
+    "files":[{"path":"foo.exe","object":"aa/bb/cc/dddd","size":123456,"mode":33204}]
   }
 }"#).unwrap();
         assert_eq!(inp, v);

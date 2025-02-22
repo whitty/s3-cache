@@ -64,7 +64,7 @@ EOF
   find .
 
   test -x hello.sh
-  # test -x out/hello.sh - not implemented yet
+  test -x out/hello.sh
 
   $s3_cache delete --name="$cache_name"
 }
