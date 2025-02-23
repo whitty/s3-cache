@@ -45,6 +45,10 @@ for (ver in build_os_vers) {
           }
         }
 
+        stage("${version}-build-windows") {
+          sh "cargo build --target x86_64-pc-windows-gnu"
+        }
+
       } // withEnv
 
     } //node
