@@ -2,7 +2,7 @@
 // (C) Copyright 2025 Greg Whiteley
 
 use anyhow::Context;
-use async_std::path::PathBuf;
+use async_std::{fs, path::PathBuf};
 use std::os::unix::fs::PermissionsExt;
 
 use crate::{Result, cache::{self, Cache}, Storage};
@@ -12,11 +12,12 @@ struct Meta {
     path: PathBuf,
     file: Option<std::fs::Metadata>,
     hash: Option<[u8;32]>,
+    link_target: Option<PathBuf>,
 }
 
 impl Meta {
     fn new(path: PathBuf) -> Meta {
-        Meta { path, file: None, hash: None }
+        Meta { path, file: None, hash: None, link_target: None }
     }
 
     async fn resolve(&mut self) -> Result<()> {
@@ -35,6 +36,10 @@ impl Meta {
         })
     }
 
+    fn cacheable_link(&self) -> Option<PathBuf> {
+        self.link_target.clone()
+    }
+
     fn is_cacheable_file(&self) -> bool {
         self.hash.is_some() && self.file.is_some()
     }
@@ -46,6 +51,9 @@ async fn meta_for(path: PathBuf) -> Result<Meta> {
     let mut m = Meta::new(path);
     m.resolve().await?;
 
+    if m.file.as_ref().map_or(false, std::fs::Metadata::is_symlink) {
+        m.link_target = Some(fs::read_link(m.path.as_path()).await?);
+    }
     if m.file.as_ref().map_or(true, std::fs::Metadata::is_file) {
         m.hash = Some(cache::read_hash(m.path.as_path(), &m.file.as_ref().map(std::fs::Metadata::len)).await?);
     }
@@ -61,6 +69,17 @@ async fn download_file(storage: Storage, file: cache::File, cache_name: String, 
             log::info!("creating directory {:?} for {:?}", &p, &path);
             std::fs::create_dir_all(p)?;
         }
+    }
+
+    if fs::symlink_metadata(&path).await.map_or(false, |x| x.is_symlink()) {
+        // erase symlink instead of writing through it
+        fs::remove_file(&path).await.context(format!("Removing existing symlink at {}", &path.display()))?;
+    }
+
+    if let Some(target) = file.link_target {
+        log::debug!("Creating symlink {} -> {}", &path.display(), &target);
+        std::os::unix::fs::symlink(target, path)?;
+        return Ok(())
     }
 
     let mut f = tokio::fs::File::create(&path).await?;
@@ -148,6 +167,24 @@ pub async fn upload(storage: Storage,
                             meta.path.to_str(), meta, meta.file.as_ref().map_or(0, |x| { x.len() }),
                             meta.object_path());
 
+                if let Some(link) = meta.cacheable_link() {
+
+                    let path = meta.path.to_str().expect("bad paths should be handled by is_cacheable");
+
+                    let file = cache::File {
+                        path: path.to_owned(),
+                        object: None,
+                        size: link.as_os_str().len() as u64,
+                        mode: None,
+                        link_target: Some(link.to_str().expect("symlink text should be normal string").into()),
+                    };
+
+                    cache_entry.files.push(file);
+
+                    log::info!("{} symlink to {}", path, link.to_str().unwrap());
+                    continue;
+                }
+
                 if !meta.is_cacheable_file() {
                     log::info!("{} will not be uploaded", meta.path.to_str().unwrap());
                     continue;
@@ -173,6 +210,7 @@ pub async fn upload(storage: Storage,
                     object,
                     size,
                     mode,
+                    link_target: None,
                 };
 
                 cache_entry.files.push(file.clone());

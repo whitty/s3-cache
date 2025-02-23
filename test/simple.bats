@@ -61,6 +61,8 @@ EOF
   $s3_cache upload --name="$cache_name" hello.sh text.txt dir/text.txt
 
   $s3_cache list | grep "$cache_name"
+  # TODO test this too
+  $s3_cache list --name="$cache_name"
 
   $s3_cache download --name="$cache_name" --outpath="out"
 
@@ -83,6 +85,8 @@ EOF
   $s3_cache upload -r --name="$cache_name" hello.sh text.txt dir
 
   $s3_cache list | grep "$cache_name"
+  # TODO test this too
+  $s3_cache list --name="$cache_name"
 
   $s3_cache download --name="$cache_name" --outpath="out"
 
@@ -91,6 +95,46 @@ EOF
   cmp text.txt out/text.txt
   cmp dir/text.txt out/dir/text.txt
   test -x out/hello.sh
+
+  $s3_cache delete --name="$cache_name"
+}
+
+@test "symlink put/get" {
+  $s3_cache list
+
+  prepare_basic_files
+
+  pushd dir
+  ln -s text.txt text.link
+  ln -s ../hello.sh hello.link
+  popd
+  test -L dir/text.link
+  test -L dir/hello.link
+  cmp dir/text.link dir/text.txt
+  cmp dir/hello.link hello.sh
+  find .
+
+  $s3_cache upload -r --name="$cache_name" hello.sh text.txt dir
+
+  $s3_cache list | grep "$cache_name"
+  # TODO test this too
+  $s3_cache list --name="$cache_name"
+
+  $s3_cache download --debug --name="$cache_name" --outpath="out"
+
+  find .
+  cmp hello.sh out/hello.sh
+  cmp text.txt out/text.txt
+  cmp dir/text.txt out/dir/text.txt
+  test -x out/hello.sh
+
+  cmp dir/text.txt out/dir/text.link
+  cmp hello.sh out/dir/hello.link
+  test -L out/dir/hello.link
+  test -L out/dir/text.link
+
+  [ "$(readlink -f out/dir/text.link)" = "$(readlink -f out/dir/text.txt)" ]
+  [ "$(readlink -f out/dir/hello.link)" = "$(readlink -f out/hello.sh)" ]
 
   $s3_cache delete --name="$cache_name"
 }
