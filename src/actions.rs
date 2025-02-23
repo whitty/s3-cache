@@ -3,6 +3,7 @@
 
 use anyhow::Context;
 use async_std::{fs, path::PathBuf};
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
 use crate::{Result, cache::{self, Cache}, Storage};
@@ -43,6 +44,18 @@ impl Meta {
     fn is_cacheable_file(&self) -> bool {
         self.hash.is_some() && self.file.is_some()
     }
+
+    #[cfg(unix)]
+    fn get_mode(&self) -> Option<u32> {
+        self.file.as_ref().map(|meta| {
+            meta.permissions().mode()
+        })
+    }
+
+    #[cfg(not(unix))]
+    fn get_mode(&self) -> Option<u32> {
+        None
+    }
 }
 
 async fn meta_for(path: PathBuf) -> Result<Meta> {
@@ -58,6 +71,30 @@ async fn meta_for(path: PathBuf) -> Result<Meta> {
         m.hash = Some(cache::read_hash(m.path.as_path(), &m.file.as_ref().map(std::fs::Metadata::len)).await?);
     }
     Ok(m)
+}
+
+#[cfg(unix)]
+fn create_symlink(target: String, path: PathBuf) -> Result<()> {
+    log::debug!("Creating symlink {} -> {}", &path.display(), &target);
+    std::os::unix::fs::symlink(target, path)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn create_symlink(target: String, path: PathBuf) -> Result<()> {
+    log::error!("Unable to create symlink {} -> {} on Windows", &path.display(), &target);
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_permisions(path: &async_std::path::Path, mode: u32) {
+    if let Err(e) = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)) {
+        log::warn!("Failed to set permissions on {}: {}", path.to_str().unwrap(), e.kind());
+    }
+}
+
+#[cfg(not(unix))]
+fn set_permisions(_path: &async_std::path::Path, _mode: u32) {
 }
 
 async fn download_file(storage: Storage, file: cache::File, cache_name: String, base: PathBuf) -> Result<()> {
@@ -77,8 +114,7 @@ async fn download_file(storage: Storage, file: cache::File, cache_name: String, 
     }
 
     if let Some(target) = file.link_target {
-        log::debug!("Creating symlink {} -> {}", &path.display(), &target);
-        std::os::unix::fs::symlink(target, path)?;
+        create_symlink(target, path)?;
         return Ok(())
     }
 
@@ -90,9 +126,7 @@ async fn download_file(storage: Storage, file: cache::File, cache_name: String, 
     storage.get_file(&mut f, object_path).await?;
 
     if let Some(mode) = file.mode {
-        if let Err(e) = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)) {
-            log::warn!("Failed to set permissions on {}: {}", path.to_str().unwrap(), e.kind());
-        }
+        set_permisions(path.as_path(), mode);
     }
     Ok(())
 }
@@ -193,9 +227,7 @@ pub async fn upload(storage: Storage,
                 let path = meta.path.to_str().expect("bad paths should be handled by is_cacheable");
                 let object = meta.object_path().expect("todo no path should be handled by is_cacheable").to_str().expect("should not generate bad paths").to_owned();
                 let size = meta.file.as_ref().map_or(0, std::fs::Metadata::len);
-                let mode = meta.file.as_ref().map(|meta| {
-                    meta.permissions().mode()
-                });
+                let mode = meta.get_mode();
 
                 // small files should be uploaded under cache and not deduped for deletion
                 // pragmatism
