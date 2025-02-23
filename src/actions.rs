@@ -20,7 +20,7 @@ impl Meta {
     }
 
     async fn resolve(&mut self) -> Result<()> {
-        self.file = Some(self.path.metadata().await?);
+        self.file = Some(self.path.symlink_metadata().await?);
         Ok(())
     }
 
@@ -35,7 +35,7 @@ impl Meta {
         })
     }
 
-    fn is_cacheable(&self) -> bool {
+    fn is_cacheable_file(&self) -> bool {
         self.hash.is_some() && self.file.is_some()
     }
 }
@@ -148,7 +148,8 @@ pub async fn upload(storage: Storage,
                             meta.path.to_str(), meta, meta.file.as_ref().map_or(0, |x| { x.len() }),
                             meta.object_path());
 
-                if !meta.is_cacheable() {
+                if !meta.is_cacheable_file() {
+                    log::info!("{} will not be uploaded", meta.path.to_str().unwrap());
                     continue;
                 }
 
