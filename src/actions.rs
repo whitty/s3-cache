@@ -51,10 +51,10 @@ async fn meta_for(path: PathBuf) -> Result<Meta> {
     let mut m = Meta::new(path);
     m.resolve().await?;
 
-    if m.file.as_ref().map_or(false, std::fs::Metadata::is_symlink) {
+    if m.file.as_ref().is_some_and(std::fs::Metadata::is_symlink) {
         m.link_target = Some(fs::read_link(m.path.as_path()).await?);
     }
-    if m.file.as_ref().map_or(true, std::fs::Metadata::is_file) {
+    if m.file.as_ref().is_some_and(std::fs::Metadata::is_file) {
         m.hash = Some(cache::read_hash(m.path.as_path(), &m.file.as_ref().map(std::fs::Metadata::len)).await?);
     }
     Ok(m)
@@ -71,7 +71,7 @@ async fn download_file(storage: Storage, file: cache::File, cache_name: String, 
         }
     }
 
-    if fs::symlink_metadata(&path).await.map_or(false, |x| x.is_symlink()) {
+    if fs::symlink_metadata(&path).await.is_ok_and(|x| x.is_symlink()) {
         // erase symlink instead of writing through it
         fs::remove_file(&path).await.context(format!("Removing existing symlink at {}", &path.display()))?;
     }
