@@ -114,12 +114,21 @@ pub async fn expire(storage: Storage, age_days: u32) -> Result<()> {
 
 pub async fn upload(storage: Storage,
                     cache_name: &str, paths: &[std::path::PathBuf],
+                    recurse: bool,
                     cache_threshold: usize) -> Result<()> {
 
     let mut path_set = tokio::task::JoinSet::<UploadWork>::new();
 
-    for path in paths {
-        path_set.spawn(work_meta_for(path.into()));
+    if recurse {
+        for path in paths {
+            for entry in walkdir::WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+                path_set.spawn(work_meta_for(entry.path().into()));
+            }
+        }
+    } else {
+        for path in paths {
+            path_set.spawn(work_meta_for(path.into()));
+        }
     }
 
     let mut cache_entry = cache::Cache::default();

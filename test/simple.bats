@@ -31,8 +31,8 @@ teardown() {
   [ -d "$test_dir" ] && rm -rf "$test_dir"
 }
 
-@test "basic put/get" {
-  $s3_cache list
+function prepare_basic_files {
+
   cat > hello.sh <<EOF
 #!/bin/sh
 echo hello world
@@ -51,6 +51,12 @@ EOF
 
   echo "cache_name=$cache_name"
   find .
+}
+
+@test "basic put/get" {
+  $s3_cache list
+
+  prepare_basic_files
 
   $s3_cache upload --name="$cache_name" hello.sh text.txt dir/text.txt
 
@@ -58,12 +64,32 @@ EOF
 
   $s3_cache download --name="$cache_name" --outpath="out"
 
+  find .
   cmp hello.sh out/hello.sh
   cmp text.txt out/text.txt
   cmp dir/text.txt out/dir/text.txt
-  find .
 
   test -x hello.sh
+  test -x out/hello.sh
+
+  $s3_cache delete --name="$cache_name"
+}
+
+@test "recurse put/get" {
+  $s3_cache list
+
+  prepare_basic_files
+
+  $s3_cache upload -r --name="$cache_name" hello.sh text.txt dir
+
+  $s3_cache list | grep "$cache_name"
+
+  $s3_cache download --name="$cache_name" --outpath="out"
+
+  find .
+  cmp hello.sh out/hello.sh
+  cmp text.txt out/text.txt
+  cmp dir/text.txt out/dir/text.txt
   test -x out/hello.sh
 
   $s3_cache delete --name="$cache_name"
