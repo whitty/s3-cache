@@ -78,13 +78,15 @@ async fn download_file(storage: Storage, file: cache::File, cache_name: String, 
     Ok(())
 }
 
-async fn upload_file(storage: Storage, file: cache::File, cache_name: String) -> Result<()> {
+async fn upload_file(storage: Storage, file: cache::File, cache_name: String, dry_run: bool) -> Result<()> {
     let mut f = tokio::fs::File::open(&file.path).await?;
 
     let p = file.storage_path(cache_name.as_str());
     let path = p.to_str().expect("Invalid storage_path -> string");
     log::info!("Inserting {}", file.path);
-    storage.put_file_unless_exists(&mut f, path).await?;
+    if ! dry_run {
+        storage.put_file_unless_exists(&mut f, path).await?;
+    }
 
     Ok(())
 }
@@ -98,8 +100,8 @@ async fn work_meta_for(path: PathBuf) -> UploadWork {
     UploadWork::Meta(meta_for(path).await)
 }
 
-async fn work_upload(storage: Storage, file: cache::File, cache_name: String) -> UploadWork {
-    UploadWork::Upload(upload_file(storage, file, cache_name).await)
+async fn work_upload(storage: Storage, file: cache::File, cache_name: String, dry_run: bool) -> UploadWork {
+    UploadWork::Upload(upload_file(storage, file, cache_name, dry_run).await)
 }
 
 pub async fn expire(storage: Storage, age_days: u32) -> Result<()> {
@@ -114,7 +116,7 @@ pub async fn expire(storage: Storage, age_days: u32) -> Result<()> {
 
 pub async fn upload(storage: Storage,
                     cache_name: &str, paths: &[std::path::PathBuf],
-                    recurse: bool,
+                    recurse: bool, dry_run: bool,
                     cache_threshold: usize) -> Result<()> {
 
     let mut path_set = tokio::task::JoinSet::<UploadWork>::new();
@@ -174,7 +176,7 @@ pub async fn upload(storage: Storage,
 
                 cache_entry.files.push(file.clone());
 
-                path_set.spawn(work_upload(storage.clone(), file, cache_name.to_owned()));
+                path_set.spawn(work_upload(storage.clone(), file, cache_name.to_owned(), dry_run));
             },
 
             UploadWork::Upload(result) => {
@@ -185,7 +187,11 @@ pub async fn upload(storage: Storage,
 
     let path = Cache::entry_location(cache_name);
     log::debug!("Pushing cache entry with {} files to {:?}", cache_entry.files.len(), path);
-    storage.put_file(&mut std::io::Cursor::new(cache_entry.into_string()), path.to_str().unwrap()).await?;
+    if dry_run {
+        log::warn!("Simulate Pushing cache entry with {} files to {:?}", cache_entry.files.len(), path);
+    } else {
+        storage.put_file(&mut std::io::Cursor::new(cache_entry.into_string()), path.to_str().unwrap()).await?;
+    }
 
     Ok(())
 }

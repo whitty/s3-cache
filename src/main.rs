@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
 
     match &args.command {
         Commands::Upload(arg) => {
-            s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files, arg.recurse, arg.threshold).await?;
+            s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files, arg.recurse, arg.dry_run, arg.threshold).await?;
         },
         Commands::Download(arg) => {
             s3_cache::actions::download(bucket, arg.cache.name.as_str(), arg.outpath.clone()).await?;
@@ -126,6 +126,10 @@ struct Upload {
     #[arg(long, short='r', default_value_t=false)]
     /// Upload all files in directories
     recurse: bool,
+
+    #[arg(long, short='n', default_value_t=false)]
+    /// Don't actually do the upload
+    dry_run: bool,
 
     #[command(flatten)]
     cache: CacheArgs,
