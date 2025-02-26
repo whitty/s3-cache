@@ -320,19 +320,15 @@ async fn work_download(storage: Storage, file: cache::File, cache_name: String, 
     DownloadWork::Download(download_file(storage, file, cache_name, base).await)
 }
 
-pub async fn download(storage: Storage, cache_name: &str, outpath: std::path::PathBuf) -> Result<()> {
+pub async fn download(storage: Storage, cache_name: &str, outpath: std::path::PathBuf, max_in_flight: u32) -> Result<()> {
     let c = read_cache_info(&storage, cache_name).await?;
     if ! c.files.is_empty() && !outpath.is_dir() {
         std::fs::create_dir_all(&outpath).context(format!("Failed to create {:?}", &outpath))?;
     }
 
     let mut download_set = tokio::task::JoinSet::<DownloadWork>::new();
-    for f in c.files {
-        download_set.spawn(work_download(storage.clone(), f.clone(), cache_name.to_owned(), outpath.clone().into()));
-    }
 
-    log::debug!("Dispatching download jobs...");
-    while let Some(work) = download_set.join_next().await {
+    let handle = |work: std::result::Result<DownloadWork, tokio::task::JoinError>| -> Result<()> {
         // JoinError
         let work = work.with_context(|| "Failure waiting on download jobs")?;
 
@@ -341,7 +337,37 @@ pub async fn download(storage: Storage, cache_name: &str, outpath: std::path::Pa
                 result.with_context(|| "Failed to download file")?;
             }
         }
+        Ok(())
+    };
+
+    let mut count = 0;
+    let total = c.files.len();
+
+    for f in c.files {
+        while download_set.len() >= max_in_flight as usize {
+            if count == 0 {
+                log::debug!("Dispatching download jobs...");
+            }
+            if let Some(work) = download_set.join_next().await {
+                count += 1;
+                handle(work)?;
+            } else {
+                log::warn!("Unexpected termination of downloads after {} expecting {}", count, total);
+                break;
+            }
+        }
+        download_set.spawn(work_download(storage.clone(), f.clone(), cache_name.to_owned(), outpath.clone().into()));
     }
+
+    if count == 0 {
+        log::debug!("Dispatching download jobs...");
+    }
+    while let Some(work) = download_set.join_next().await {
+        count += 1;
+        handle(work)?;
+    }
+
+    log::warn!("Downloaded {} files from '{}'", count, cache_name);
 
     Ok(())
 }

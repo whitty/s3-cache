@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
             s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files, arg.recurse, arg.dry_run, arg.threshold, arg.max_in_flight).await?;
         },
         Commands::Download(arg) => {
-            s3_cache::actions::download(bucket, arg.cache.name.as_str(), arg.outpath.clone()).await?;
+            s3_cache::actions::download(bucket, arg.cache.name.as_str(), arg.outpath.clone(), arg.max_in_flight).await?;
         },
         Commands::Delete(arg) => {
             s3_cache::actions::delete(bucket, arg.cache.name.as_str()).await?;
@@ -158,7 +158,11 @@ struct Download {
 
     /// Where to put the output
     #[arg(long, short='o', default_value=".")]
-    outpath: PathBuf
+    outpath: PathBuf,
+
+    #[arg(long, default_value_t=3, value_parser=greater_than_0)]
+    /// Maximum number of parallel network connections
+    max_in_flight: u32,
 }
 
 #[derive(clap::Args, Debug)]
