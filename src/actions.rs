@@ -170,7 +170,8 @@ pub async fn expire(storage: Storage, age_days: u32) -> Result<()> {
 pub async fn upload(storage: Storage,
                     cache_name: &str, paths: &[std::path::PathBuf],
                     recurse: bool, dry_run: bool,
-                    cache_threshold: usize) -> Result<()> {
+                    cache_threshold: usize,
+                    max_in_flight: u32) -> Result<()> {
 
     let mut path_set = tokio::task::JoinSet::<UploadWork>::new();
 
@@ -189,7 +190,6 @@ pub async fn upload(storage: Storage,
     let mut cache_entry = cache::Cache::default();
     let mut delayed = std::collections::VecDeque::new();
     let mut net_in_flight = 0;
-    let max_in_flight = 3;
 
     log::debug!("Dispatching upload processing jobs...");
     while let Some(work) = path_set.join_next().await {

@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
 
     match &args.command {
         Commands::Upload(arg) => {
-            s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files, arg.recurse, arg.dry_run, arg.threshold).await?;
+            s3_cache::actions::upload(bucket, arg.cache.name.as_str(), &arg.files, arg.recurse, arg.dry_run, arg.threshold, arg.max_in_flight).await?;
         },
         Commands::Download(arg) => {
             s3_cache::actions::download(bucket, arg.cache.name.as_str(), arg.outpath.clone()).await?;
@@ -133,6 +133,10 @@ struct Upload {
     #[arg(long, short='n', default_value_t=false)]
     /// Don't actually do the upload
     dry_run: bool,
+
+    #[arg(long, default_value_t=3)]
+    /// Maximum number of parallel network connections
+    max_in_flight: u32,
 
     #[command(flatten)]
     cache: CacheArgs,
