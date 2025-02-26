@@ -121,6 +121,10 @@ struct CacheArgs {
     name: String,
 }
 
+fn greater_than_0(s: &str) -> Result<u32, String> {
+    clap_num::number_range(s, 1, 256)
+}
+
 #[derive(clap::Args, Debug)]
 struct Upload {
     /// Files to cache and upload
@@ -134,7 +138,7 @@ struct Upload {
     /// Don't actually do the upload
     dry_run: bool,
 
-    #[arg(long, default_value_t=3)]
+    #[arg(long, default_value_t=3, value_parser=greater_than_0)]
     /// Maximum number of parallel network connections
     max_in_flight: u32,
 
