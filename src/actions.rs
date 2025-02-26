@@ -257,11 +257,13 @@ pub async fn upload(storage: Storage,
     }
 
     let path = Cache::entry_location(cache_name);
-    log::debug!("Pushing cache entry with {} files to {:?}", cache_entry.files.len(), path);
+    let count = cache_entry.files.len();
+    log::debug!("Pushing cache entry with {} files to {:?}", count, path);
     if dry_run {
-        log::warn!("Simulate Pushing cache entry with {} files to {:?}", cache_entry.files.len(), path);
+        log::warn!("Simulate Pushing cache entry with {} files to '{}' at {:?}", count, cache_name, path);
     } else {
         storage.put_file(&mut std::io::Cursor::new(cache_entry.into_string()), path.to_str().unwrap()).await?;
+        log::warn!("Pushed {} files to '{}'", count, cache_name);
     }
 
     Ok(())
@@ -337,5 +339,6 @@ pub async fn delete(storage: Storage, cache_name: &str) -> Result<()> {
     let mut path = Cache::entry_location(cache_name);
     path.pop();
     storage.recursive_delete_p(path.as_ref()).await?;
+    log::warn!("Deleted '{}'", cache_name);
     Ok(())
 }
