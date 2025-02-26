@@ -20,8 +20,8 @@ async fn main() -> Result<()> {
         env_logger::Env::default()
             .default_filter_or(
                 if args.debug { "debug" }
-                else if args.verbose { "info" }
-                else { "warn" }
+                else if args.verbose { "info,s3::request::tokio_backend=error" }
+                else { "warn,s3::request::tokio_backend=error" }
             ));
     if !args.debug {
         logger.format(|buf, record| {
