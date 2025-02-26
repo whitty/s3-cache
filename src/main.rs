@@ -11,6 +11,9 @@ async fn main() -> Result<()> {
     // .env support in aid of Credentials::default()
     let dotenv = dotenvy::dotenv();
 
+    #[cfg(windows)]
+    let args = Options::parse_from(wild::args());
+    #[cfg(not(windows))]
     let args = Options::parse();
 
     let mut logger = env_logger::Builder::from_env(
