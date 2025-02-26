@@ -187,6 +187,9 @@ pub async fn upload(storage: Storage,
     }
 
     let mut cache_entry = cache::Cache::default();
+    let mut delayed = std::collections::VecDeque::new();
+    let mut net_in_flight = 0;
+    let max_in_flight = 3;
 
     log::debug!("Dispatching upload processing jobs...");
     while let Some(work) = path_set.join_next().await {
@@ -247,14 +250,26 @@ pub async fn upload(storage: Storage,
 
                 cache_entry.files.push(file.clone());
 
-                path_set.spawn(work_upload(storage.clone(), file, cache_name.to_owned(), dry_run));
+                if net_in_flight >= max_in_flight {
+                    delayed.push_back(work_upload(storage.clone(), file, cache_name.to_owned(), dry_run));
+                } else {
+                    net_in_flight += 1;
+                    path_set.spawn(work_upload(storage.clone(), file, cache_name.to_owned(), dry_run));
+                }
             },
 
             UploadWork::Upload(result) => {
                 result.with_context(|| "Failed to upload file")?;
+                assert!(net_in_flight > 0);
+                net_in_flight -= 1;
+                while !delayed.is_empty() && net_in_flight < max_in_flight {
+                    net_in_flight += 1;
+                    path_set.spawn(delayed.pop_front().unwrap());
+                }
             },
         }
     }
+    assert!(delayed.is_empty());
 
     let path = Cache::entry_location(cache_name);
     let count = cache_entry.files.len();
