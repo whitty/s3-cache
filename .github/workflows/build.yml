@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, ubuntu-22.04, ubuntu-24.04, macos-latest, windows-latest]
+        os: [ubuntu-22.04, ubuntu-24.04, macos-latest, windows-latest]
         rust:
           - stable
     timeout-minutes: 10
@@ -20,6 +20,43 @@ jobs:
 
       - name: Reset toolchain
         run: rm -f rust-toolchain.toml
+        shell: bash
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{matrix.rust}}
+          components: clippy
+
+      - name: Build
+        run: cargo build
+
+      - name: Unit-test
+        run: cargo test
+
+      - name: Analyze
+        run: cargo clippy
+
+  other-test:
+    name: Test build for ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os:
+          - '20.04'
+        rust:
+          - stable
+    container:
+      image: ghcr.io/whitty/gh_ubuntu_${{ matrix.os }}:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: apt update && env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential libssl-dev pkg-config
+
+      - name: Reset toolchain
+        run: |
+          rm -f rust-toolchain.toml
         shell: bash
 
       - uses: dtolnay/rust-toolchain@master
