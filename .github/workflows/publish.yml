@@ -9,69 +9,6 @@ on:
   push:
 
 jobs:
-  build:
-    name: ${{matrix.rust}} rust on ${{matrix.os}}
-    runs-on: ${{matrix.os}}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            rust: stable
-            name: s3-cache_22.04
-            exe: s3-cache
-          - os: ubuntu-24.04
-            rust: stable
-            name: s3-cache_24.04
-            exe: s3-cache
-          - os: windows-latest
-            rust: stable
-            name: s3-cache_windows
-            exe: s3-cache.exe
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Reset toolchain
-        run: rm -f rust-toolchain.toml
-        shell: bash
-
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{matrix.rust}}
-          components: clippy
-
-      - name: Unit-test
-        run: cargo test
-
-      - name: Analyze
-        run: cargo clippy
-
-      - name: Release Build
-        run: cargo build --release --locked
-
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: target/release/${{ matrix.exe }}
-
-      - name: Archive
-        uses: a7ul/tar-action@v1.1.0
-        id: compress
-        with:
-          command: c
-          cwd: target/release/
-          files: |
-            ./${{ matrix.exe }}
-          outPath: ${{ matrix.name }}.tar.gz
-
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ matrix.name }}.tar.gz
-          asset_name: ${{ matrix.name }}.tar.gz
-          tag: ${{ github.ref }}
 
   other-build:
     name: Test build for ${{ matrix.os }}
