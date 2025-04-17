@@ -18,10 +18,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-20.04
-            rust: stable
-            name: s3-cache_20.04
-            exe: s3-cache
           - os: ubuntu-22.04
             rust: stable
             name: s3-cache_22.04
@@ -40,6 +36,67 @@ jobs:
 
       - name: Reset toolchain
         run: rm -f rust-toolchain.toml
+        shell: bash
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{matrix.rust}}
+          components: clippy
+
+      - name: Unit-test
+        run: cargo test
+
+      - name: Analyze
+        run: cargo clippy
+
+      - name: Release Build
+        run: cargo build --release --locked
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: target/release/${{ matrix.exe }}
+
+      - name: Archive
+        uses: a7ul/tar-action@v1.1.0
+        id: compress
+        with:
+          command: c
+          cwd: target/release/
+          files: |
+            ./${{ matrix.exe }}
+          outPath: ${{ matrix.name }}.tar.gz
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ matrix.name }}.tar.gz
+          asset_name: ${{ matrix.name }}.tar.gz
+          tag: ${{ github.ref }}
+
+  other-build:
+    name: Test build for ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-20.04
+            rust: stable
+            name: s3-cache_20.04
+            exe: s3-cache
+    container:
+      image: ghcr.io/whitty/gh_ubuntu_${{ matrix.os }}:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: apt update && env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential libssl-dev pkg-config
+
+      - name: Reset toolchain
+        run: |
+          rm -f rust-toolchain.toml
         shell: bash
 
       - uses: dtolnay/rust-toolchain@master
