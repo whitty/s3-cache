@@ -173,8 +173,13 @@ impl Connection {
         }
     }
 
+    fn validate_path(s: &str) {
+        assert!(s.find('\\').is_none(), "invalid path {:?}", s);
+    }
+
     async fn put_file<R: tokio::io::AsyncRead + Unpin + ?Sized>(
         &self, reader: &mut R, s3_path: impl AsRef<str>) -> Result<()> {
+        Self::validate_path(s3_path.as_ref());
         let response = self.bucket.put_object_stream(reader, s3_path.as_ref()).await?;
 
         if response.status_code() != 200 {
@@ -184,6 +189,7 @@ impl Connection {
     }
 
     async fn get_file_stream<W: tokio::io::AsyncWrite + Send + Unpin + ?Sized>(&self, s3_path: impl AsRef<str>, w: &mut W) -> Result<()> {
+        Self::validate_path(s3_path.as_ref());
         let code = self.bucket.get_object_to_writer(s3_path.as_ref(), w).await?;
 
         if code != 200 {
@@ -193,6 +199,7 @@ impl Connection {
     }
 
     async fn delete(&self, s3_path: impl AsRef<str>) -> Result<()> {
+        Self::validate_path(s3_path.as_ref());
         let response = self.bucket.delete_object(s3_path.as_ref()).await?;
 
         log::info!("deleted '{}'", s3_path.as_ref());
@@ -204,6 +211,7 @@ impl Connection {
     }
 
     async fn head(&self, path: impl AsRef<str>) -> Result<s3::serde_types::HeadObjectResult> {
+        Self::validate_path(path.as_ref());
         let (head_object_result, _code) = self.bucket.head_object(path).await?;
         Ok(head_object_result)
     }
@@ -223,6 +231,7 @@ impl Connection {
     }
 
     async fn list_dirs(&self, path: impl AsRef<str>) -> Result<Vec<String>> {
+        Self::validate_path(path.as_ref());
         let prefix = PathBuf::from(path.as_ref());
         for result in self.bucket.list(String::from(path.as_ref()), Some("/".to_string())).await? {
 
@@ -243,6 +252,7 @@ impl Connection {
         work.push(String::from(path.as_ref()));
 
         while let Some(path) = work.pop() {
+            Self::validate_path(path.as_ref());
 
             for result in self.bucket.list(path, Some("/".to_string())).await? {
 
