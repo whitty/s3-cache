@@ -11,17 +11,17 @@ on:
 jobs:
 
   other-build:
-    name: Test build for ${{ matrix.os }}
+    name: ${{matrix.rust}} rust on ${{matrix.os}}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu_20.04
             rust: stable
             name: s3-cache_20.04
             exe: s3-cache
     container:
-      image: ghcr.io/whitty/gh_ubuntu_${{ matrix.os }}:latest
+      image: ghcr.io/whitty/gh_${{ matrix.os }}:latest
 
     steps:
       - uses: actions/checkout@v4
