@@ -99,7 +99,7 @@ fn set_permisions(_path: &async_std::path::Path, _mode: u32) {
 
 async fn download_file(storage: Storage, file: cache::File, cache_name: String, base: PathBuf) -> Result<()> {
     let mut path = base;
-    path.push(&file.path);
+    path.push(file.path());
 
     if let Some(p) = path.parent() {
         if p != path && ! p.is_dir().await {
@@ -132,11 +132,11 @@ async fn download_file(storage: Storage, file: cache::File, cache_name: String, 
 }
 
 async fn upload_file(storage: Storage, file: cache::File, cache_name: String, dry_run: bool) -> Result<()> {
-    let mut f = tokio::fs::File::open(&file.path).await?;
+    let mut f = tokio::fs::File::open(&file.path_str()).await?;
 
     let p = file.storage_path(cache_name.as_str());
     let path = p.to_str().expect("Invalid storage_path -> string");
-    log::info!("Inserting {}", file.path);
+    log::info!("Inserting {}", file.path_str());
     if ! dry_run {
         storage.put_file_unless_exists(&mut f, path).await?;
     }
@@ -208,13 +208,13 @@ pub async fn upload(storage: Storage,
 
                     let path = meta.path.to_str().expect("bad paths should be handled by is_cacheable");
 
-                    let file = cache::File {
-                        path: path.to_owned(),
-                        object: None,
-                        size: link.as_os_str().len() as u64,
-                        mode: None,
-                        link_target: Some(link.to_str().expect("symlink text should be normal string").into()),
-                    };
+                    let file = cache::File::new_async(
+                        meta.path.as_path(),
+                        None,
+                        link.as_os_str().len() as u64,
+                        None,
+                        Some(link.to_str().expect("symlink text should be normal string").into()),
+                    );
 
                     cache_entry.files.push(file);
 
@@ -227,26 +227,24 @@ pub async fn upload(storage: Storage,
                     continue;
                 }
 
-                let path = meta.path.to_str().expect("bad paths should be handled by is_cacheable");
-                let object = meta.object_path().expect("todo no path should be handled by is_cacheable").to_str().expect("should not generate bad paths").to_owned();
                 let size = meta.file.as_ref().map_or(0, std::fs::Metadata::len);
                 let mode = meta.get_mode();
 
                 // small files should be uploaded under cache and not deduped for deletion
                 // pragmatism
                 let object = if size > cache_threshold.try_into().expect("usize should if in u64") {
-                    Some(object.clone())
+                    meta.object_path().clone()
                 } else {
                     None
                 };
 
-                let file = cache::File {
-                    path: path.to_owned(),
+                let file = cache::File::new_async(
+                    meta.path.as_path(),
                     object,
                     size,
                     mode,
-                    link_target: None,
-                };
+                    None,
+                );
 
                 cache_entry.files.push(file.clone());
 
@@ -297,11 +295,11 @@ pub async fn list(storage: Storage, cache_name: Option<&str>) -> Result<()> {
     if let Some(cache_name) = cache_name {
         let c = read_cache_info(&storage, cache_name).await?;
 
-        let largest = c.files.iter().max_by(|x, y| x.path.len().cmp(&y.path.len()));
+        let largest = c.files.iter().max_by(|x, y| x.path_str().len().cmp(&y.path_str().len()));
         if let Some(longest) = largest {
-            let len = longest.path.len().max(30);
+            let len = longest.path_str().len().max(30);
             for f in c.files {
-                println!("{path:<0$} {size:>10}", len, path=f.path, size=f.size);
+                println!("{path:<0$} {size:>10}", len, path=f.path_str(), size=f.size);
             }
         }
     } else {
